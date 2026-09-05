@@ -1,0 +1,441 @@
+import { useAutoPaperTheme } from '@rific/auto-paper'
+import { Button, IconButton, useVibration } from '@rific/feedback-press'
+import { useToast } from '@rific/toaster'
+import { ProfileChip } from '@tastic/profile'
+import { needsSharedNeutralZone, rotateInsets, useAccelerometerOrientation } from '@tastic/split-screen'
+import { router } from 'expo-router'
+import { StatusBar } from 'expo-status-bar'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native'
+import { Icon, Text } from 'react-native-paper'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
+
+import Board from '@/components/BoardHost'
+import KeyboardInputLayer from '@/components/KeyboardInputLayer'
+import { SettingsDialog } from '@/components/SettingsDialog'
+import TouchInputLayer from '@/components/TouchInputLayer'
+import { ACHIEVEMENT_TIER_COLORS } from '@/constants/achievements'
+import { MONO_FONT } from '@/constants/fonts'
+import { DESKTOP_WEB_MIN_WIDTH } from '@/constants/game'
+import { useAIOpponent } from '@/hooks/useAIOpponent'
+import { useGameSettings } from '@/hooks/useGameSettings'
+import { useGameSound } from '@/hooks/useGameSound'
+import { useGameState } from '@/hooks/useGameState'
+import { useGameStats } from '@/hooks/useGameStats'
+import { useProfiles } from '@/hooks/useProfiles'
+import { Player } from '@/types'
+import { computeBoardLayout } from '@/utils/board'
+import { humanPlayersFor } from '@/utils/gameMode'
+import { DEFAULT_SETTINGS } from '@/utils/gameSettingsValidation'
+import { safeBack } from '@/utils/navigation'
+
+// Converts a point expressed in the board's own LOCAL coordinate space (the same frame board.x/y/
+// paddleX live in) into a real, absolute screen position — the exact inverse of TouchInputLayer's
+// own screenToLocalY, generalized to both axes since floating UI (score labels, corner buttons)
+// needs a full 2D screen position, not just a Y. Used to anchor floating UI to a point ON the board
+// (e.g. "near board's own top-left corner") so it lands in the correct real screen location
+// regardless of live rotation, mirroring how BoxHockey's MatchOverlays rotates its dialog card in
+// place rather than reflowing layout.
+function localToScreen(localX: number, localY: number, containerWidth: number, containerHeight: number, screenCenterX: number, screenCenterY: number, rotation: 0 | 90 | -90): { x: number; y: number } {
+  const lx = localX - containerWidth / 2
+  const ly = localY - containerHeight / 2
+  let dx: number
+  let dy: number
+  if (rotation === 90) {
+    dx = -ly
+    dy = lx
+  } else if (rotation === -90) {
+    dx = ly
+    dy = -lx
+  } else {
+    dx = lx
+    dy = ly
+  }
+  return { x: screenCenterX + dx, y: screenCenterY + dy }
+}
+
+export default function GameScreen() {
+  // Committed once by /loadout when every human player readied up — falls back to defaults for a
+  // direct/deep link to this screen, which never went through /loadout to commit anything.
+  const { activeRoundSettings } = useGameSettings()
+  const { recordMatchOutcome } = useGameStats()
+  const { success: showAchievementToast } = useToast()
+  const roundSettings = activeRoundSettings ?? DEFAULT_SETTINGS
+  const scoreToWin = roundSettings.scoreToWin
+  const paddleSize = roundSettings.paddleSize
+  const ballSpeed = roundSettings.ballSpeed
+  // Only P2 can be CPU-controlled — pass-and-play stays the default, single-player just swaps who
+  // controls P2's paddle (see useAIOpponent, which drives it through the exact same setPaddleTarget
+  // path a human's touch uses).
+  const aiPlayer: Player | null = roundSettings.gameMode === 'vsCpu' ? 2 : null
+  const aiDifficulty = roundSettings.aiDifficulty
+  const humanPlayers = humanPlayersFor(roundSettings.gameMode)
+
+  // ─── Orientation / rotation ────────────────────────────────────────────────
+  // orientationMode/upsideDown are live accelerometer tilt readings (frozen at their last value
+  // while roundSettings.lockOrientation is on — see useAccelerometerOrientation's own `locked` param,
+  // the same opt-in convention AirHockey/BoxHockey both already use for their own "Lock Orientation"
+  // toggle).
+  //
+  // DELIBERATE DEVIATION from calling @tastic/split-screen's getFixedZoneRotation directly: that
+  // function (verified against the installed package's actual source, src/rotation.ts) returns 0 for
+  // 'faceToFace' and ±90 for 'sideBySide' — the correct polarity for BoxHockey/AirHockey's own board,
+  // which is PORTRAIT-native in local space (goals/paddle-separation along local Y) and so needs zero
+  // rotation exactly when the device is held upright/portrait (faceToFace) and a compensating ±90
+  // only when physically turned sideways (sideBySide) to still read correctly. Pong's board is the
+  // mirror image — LANDSCAPE-native in local space (paddle separation along local X, the long axis —
+  // see BoardLayout's own doc comment in types/index.ts) — so it needs the OPPOSITE polarity: zero
+  // rotation for sideBySide (the device is already physically turned so its long edge runs left-
+  // right, matching Pong's native wide shape with no correction needed) and ±90 for faceToFace (the
+  // device stays portrait/unrotated under app.json's OS-level portrait lock, so the wide board must
+  // still be rotated to present correctly to two players seated at its near/far ends — the same
+  // swap-and-rotate escape hatch FakeLandscapeView itself uses for wide content, just triggered by
+  // the opposite orientationMode, since FakeLandscapeView's own content — the home/loadout screens —
+  // is authored tall/stacked-native instead). A literal `getFixedZoneRotation(orientationMode, ...)`
+  // call here would rotate the board exactly backwards (rotating the one mode that's already correct,
+  // and leaving unrotated the one mode that genuinely needs it) — confirmed by cross-checking against
+  // AirHockey's own OLD (portrait-native) rotation wrapper, whose goalAxis === 'horizontal' branch
+  // (its own sideBySide-equivalent) is the one that rotates, mirroring getFixedZoneRotation's real
+  // convention for tall-native content exactly, which is the mirror image of what a wide-native board
+  // needs.
+  //
+  // The sign for faceToFace is keyed off `upsideDown` (the only live-varying signal in that mode —
+  // useAccelerometerOrientation's own faceToFace reading hardcodes p1OnRight: true, so it can never
+  // actually distinguish anything) rather than derived from theory — like AirHockey's original
+  // rotation wrapper, whose own rotation SIGN was "confirmed empirically" against the real render
+  // rather than reasoned out in the abstract, this polarity should be spot-checked in a simulator by
+  // rotating through both faceToFace placements and flipped if player 1's paddle doesn't end up
+  // nearest whichever seat is holding the device's own "right-side-up" reading direction.
+  const { orientationMode, upsideDown } = useAccelerometerOrientation(roundSettings.lockOrientation)
+  const rotation: 0 | 90 | -90 = orientationMode === 'faceToFace' ? (upsideDown ? -90 : 90) : 0
+
+  const { width, height } = useWindowDimensions()
+  const insets = useSafeAreaInsets()
+  // Remaps insets onto the correct visual edge for the board's own rotated container — see
+  // rotateInsets' own doc comment in @tastic/split-screen. Applied wherever this screen's floating
+  // UI needs to reason about the board's own (possibly rotated) edges, via computeBoardLayout below
+  // (board.x/y/width/height end up correctly inset once, not the real screen's raw insets).
+  const rotatedInsets = useMemo(() => rotateInsets(insets, rotation), [insets, rotation])
+
+  // Pre-rotation container dimensions: real width/height directly for sideBySide (no swap — local
+  // space maps straight onto the screen), SWAPPED for faceToFace (sizes the local rect correctly for
+  // the container that's about to be rotated 90°/-90° to display it) — see computeBoardLayout's own
+  // NOTE on the orientation layer in utils/board.ts.
+  const containerWidth = rotation === 0 ? width : height
+  const containerHeight = rotation === 0 ? height : width
+
+  const board = useMemo(() => computeBoardLayout(containerWidth, containerHeight, rotatedInsets, paddleSize), [containerWidth, containerHeight, rotatedInsets, paddleSize])
+
+  // Settings/quit-confirm dialogs pause gameplay while open.
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [confirmBackVisible, setConfirmBackVisible] = useState(false)
+  const paused = settingsOpen || confirmBackVisible
+
+  const { state, setPaddleTarget, resetGame } = useGameState(board, scoreToWin, ballSpeed, paused)
+  const { phase, ball, paddles, scores, bounceCount } = state
+
+  useAIOpponent(state, board, aiPlayer, aiDifficulty, paused, setPaddleTarget)
+
+  const isDesktopWeb = Platform.OS === 'web' && width >= DESKTOP_WEB_MIN_WIDTH
+
+  const { dark, colors: themeColors } = useAutoPaperTheme()
+  const bg = dark ? '#000000' : '#FFFFFF'
+  const fg = dark ? '#FFFFFF' : '#000000'
+  const fgMuted = dark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'
+  const cardBg = dark ? '#111111' : '#F2F2F2'
+  const cardBorder = dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'
+
+  const playerColor: Record<Player, string> = { 1: themeColors.primary, 2: themeColors.secondary }
+  const playerOnColor: Record<Player, string> = { 1: themeColors.onPrimary, 2: themeColors.onSecondary }
+  const winner: Player = scores[0] >= scoreToWin ? 1 : 2
+  const loser: Player = winner === 1 ? 2 : 1
+
+  // Neither AirHockey nor BoxHockey renders a bare ProfileChip directly — both only ever consume it
+  // indirectly through ProfilePicker/ProfilesManager — so this is the one spot in the whole family
+  // that reads useProfiles() just to look a profile up by id, not to drive a picker of its own.
+  // Falls back to the plain 'P1'/'P2' label (same idle text ProfilePicker's own guestLabel would
+  // show) whenever the winning seat never had a profile selected for this round.
+  const { profiles, lastSelected } = useProfiles()
+  const winnerProfile = profiles.find((p) => p.id === lastSelected[winner]) ?? null
+
+  const vibration = useVibration()
+  const vibrationRef = useRef(vibration)
+  // eslint-disable-next-line react-hooks/refs -- mirrored every render so the stable effects below can read the latest vibration handle without needing it in their own deps
+  vibrationRef.current = vibration
+
+  // Gameplay SFX — mirrors the haptics above one-for-one: each event fires its soundRef.current.
+  // playX() beside the matching vibrationRef.current.x(). Ref-mirrored the same way vibration is
+  // above, not called directly, so the effects below don't need these in their dependency arrays.
+  const playBounce = useGameSound(require('../../assets/sounds/bounce.wav'))
+  const playGoal = useGameSound(require('../../assets/sounds/goal.wav'))
+  const playWin = useGameSound(require('../../assets/sounds/win.wav'))
+  const soundRef = useRef({ playBounce, playGoal, playWin })
+  // eslint-disable-next-line react-hooks/refs -- see vibrationRef's own comment above
+  soundRef.current = { playBounce, playGoal, playWin }
+
+  const onBackPress = () => {
+    if (scores[0] > 0 || scores[1] > 0) setConfirmBackVisible(true)
+    else safeBack()
+  }
+
+  const firstBounceRender = useRef(true)
+  useEffect(() => {
+    if (firstBounceRender.current) {
+      firstBounceRender.current = false
+      return
+    }
+    vibrationRef.current.short()
+    soundRef.current.playBounce()
+  }, [bounceCount])
+
+  const prevScoresRef = useRef(scores)
+  useEffect(() => {
+    const [prevP1, prevP2] = prevScoresRef.current
+    prevScoresRef.current = scores
+    if (scores[0] !== prevP1 || scores[1] !== prevP2) {
+      vibrationRef.current.notification()
+      soundRef.current.playGoal()
+    }
+  }, [scores])
+
+  const prevPhaseRef = useRef(phase)
+  useEffect(() => {
+    if (prevPhaseRef.current !== 'gameOver' && phase === 'gameOver') {
+      soundRef.current.playWin()
+      // Recorded on the transition rather than in the reducer, which runs every physics step and
+      // has no notion of "this is new". prevPhaseRef guards a re-run from any other dep changing.
+      const matchWinner: Player = scores[0] >= scoreToWin ? 1 : 2
+      const profileIds = { 1: lastSelected[1] ?? undefined, 2: aiPlayer === null ? (lastSelected[2] ?? undefined) : undefined }
+      const result = recordMatchOutcome({ winner: matchWinner, scores: [scores[0], scores[1]] }, { gameMode: roundSettings.gameMode, aiDifficulty, ballSpeed, profileIds })
+      const seatUnlocks = aiPlayer === null ? [...(result.profiles[1] ?? []), ...(result.profiles[2] ?? [])] : (result.profiles[1] ?? [])
+      ;[...result.device, ...seatUnlocks].forEach((achievement) => {
+        showAchievementToast(achievement.title, 'Achievement unlocked', undefined, { color: ACHIEVEMENT_TIER_COLORS[achievement.tier], icon: achievement.icon })
+      })
+    }
+    prevPhaseRef.current = phase
+  }, [phase, scores, scoreToWin, aiPlayer, aiDifficulty, ballSpeed, lastSelected, roundSettings.gameMode, recordMatchOutcome, showAchievementToast])
+
+  // ─── Floating UI placement ─────────────────────────────────────────────────
+  // Score labels and the back/settings buttons all live OUTSIDE the board's own rotated container
+  // (they're floating UI, not part of the playing field — the board itself never rotates twice) and
+  // are individually positioned via localToScreen + their own small rotate transform, the same
+  // technique BoxHockey's MatchOverlays uses for its dialog card.
+  const screenCenterX = width / 2
+  const screenCenterY = height / 2
+
+  // Anchored to the board's OWN rect (board.x/y/width/height, not the raw container) so placement
+  // automatically respects both the rotated safe-area insets AND any desktop-web letterboxing.
+  const scoreMargin = 20
+  const p1ScorePos = localToScreen(board.x + scoreMargin, board.y + scoreMargin, containerWidth, containerHeight, screenCenterX, screenCenterY, rotation)
+  const p2ScorePos = localToScreen(board.x + board.width - scoreMargin, board.y + scoreMargin, containerWidth, containerHeight, screenCenterX, screenCenterY, rotation)
+  // Player 2 sits at the OPPOSITE end of a face-to-face hold (see the rotation comment above) — its
+  // own label needs the opposing 180° reading direction to stay upright from player 2's own seat.
+  // For sideBySide (rotation 0) this is trivially still 0 — both players share the same viewing
+  // angle there, so no relative flip is needed.
+  const p2Rotation: 0 | 90 | -90 = rotation === 90 ? -90 : rotation === -90 ? 90 : 0
+
+  const buttonMargin = 16
+  const backPos = localToScreen(board.x + buttonMargin, board.y + board.height - buttonMargin, containerWidth, containerHeight, screenCenterX, screenCenterY, rotation)
+  const settingsPos = localToScreen(board.x + board.width - buttonMargin, board.y + board.height - buttonMargin, containerWidth, containerHeight, screenCenterX, screenCenterY, rotation)
+
+  const rotationStyle = rotation !== 0 ? { transform: [{ rotate: `${rotation}deg` }] } : undefined
+  const p2RotationStyle = p2Rotation !== 0 ? { transform: [{ rotate: `${p2Rotation}deg` }] } : undefined
+
+  // See @tastic/split-screen's needsSharedNeutralZone for the full reasoning. Board-corner
+  // positioning above (backPos/settingsPos + rotationStyle, P1's own reading direction) is fine for
+  // vsCpu/sideBySide, but breaks down for two-player faceToFace: unlike the score labels just above
+  // (two independent instances, each correctly rotated for its own player via p1/p2RotationStyle),
+  // there's only ONE back chip and ONE settings chip — a single shared element can't simultaneously
+  // read right-side-up for both players when they're seated on opposite ends. neutralZoneStyle below
+  // sidesteps that instead of trying to solve it: pinned to the real screen's own left/right edge,
+  // vertically centered, the same neutral midline LightCycles'/BoxHockey's in-match chips use — still
+  // carrying rotationStyle (not p2RotationStyle) since that ±90° reflects the whole board's own
+  // landscape-native-vs-portrait-hold orientation, not a P1-vs-P2 opposing flip, and stays needed
+  // even here for the icon to read upright at all.
+  const neutralZone = needsSharedNeutralZone(orientationMode, humanPlayers.length)
+
+  return (
+    <View style={[styles.root, { backgroundColor: bg }]}>
+      <StatusBar hidden />
+
+      {/* Board's own rotated container — see the rotation comment above for why, unlike
+          BoxHockey/AirHockey's portrait-native board, Pong's landscape-native board genuinely needs
+          to visually rotate for a face-to-face portrait hold. Sized to containerWidth/containerHeight
+          (the pre-swap dimensions — since a 90°/-90° rotation swaps which screen dimension is "width"
+          vs "height" for this box's own layout, it has to be laid out BEFORE the transform using
+          whichever pairing was fed into computeBoardLayout above) and centered on the real screen
+          exactly the way @tastic/split-screen's own FakeLandscapeView centers its rotated content. */}
+      <View
+        style={[
+          styles.localContainer,
+          {
+            width: containerWidth,
+            height: containerHeight,
+            left: (width - containerWidth) / 2,
+            top: (height - containerHeight) / 2
+          },
+          rotationStyle
+        ]}
+      >
+        <Board board={board} ball={ball} paddles={paddles} phase={phase} showWalls={isDesktopWeb} />
+      </View>
+
+      {/* Touch input — deliberately a SIBLING of the board's own rotated container, not nested
+          inside it: react-native-gesture-handler does not correct a Pan gesture's own coordinate
+          reporting for an ancestor View's CSS rotation, so keeping its root entirely outside that
+          rotated ancestor sidesteps the whole class of issue rather than fighting it. Its own zones
+          still cover the full real screen and invert each touch by hand (see its own file for why the
+          split axis itself has to vary with rotation, not just the coordinate math). Disabled outside
+          live play (paused, or the match has ended) same as AirHockey's own gestureEnabled gate. */}
+      <TouchInputLayer humanPlayers={humanPlayers} enabled={!paused && phase !== 'gameOver'} containerHeight={containerHeight} rotation={rotation} onPaddleTargetY={setPaddleTarget} />
+
+      {/* Web-only, additive keyboard input — see that component's own doc for why it needs no
+      rotation-awareness the way TouchInputLayer does. paddles[1].y/paddles[2].y are read fresh
+      every frame internally (not reactively), so passing the current `paddles` snapshot here on
+      every render is exactly right, not stale. */}
+      <KeyboardInputLayer enabled={!paused && phase !== 'gameOver'} humanPlayers={humanPlayers} controlScheme={roundSettings.controlScheme} paddleY={{ 1: paddles[1].y, 2: paddles[2].y }} onPaddleTargetY={setPaddleTarget} />
+
+      {/* Score labels — plain react-native-paper Text, not on the Skia canvas, each individually
+          rotated to face its own player correctly (see p1/p2 rotation comment above) and anchored
+          near its own player's own corner of the board via localToScreen. */}
+      <View pointerEvents='none' style={[styles.floatingChip, { left: p1ScorePos.x - 30, top: p1ScorePos.y - 20 }, rotationStyle]}>
+        <Text variant='headlineMedium' style={{ color: playerColor[1], fontFamily: MONO_FONT }}>
+          {scores[0]}
+        </Text>
+      </View>
+      <View pointerEvents='none' style={[styles.floatingChip, { left: p2ScorePos.x - 30, top: p2ScorePos.y - 20 }, p2RotationStyle]}>
+        <Text variant='headlineMedium' style={{ color: playerColor[2], fontFamily: MONO_FONT }}>
+          {scores[1]}
+        </Text>
+      </View>
+
+      {/* Back + settings — see neutralZone's own doc above for the two treatments. Board-corner
+          (vsCpu/sideBySide): floating chips near the board's own bottom corners (offset from the
+          score labels, which sit near the top corners), each rotated as a unit via the same
+          `rotation` so their icon reads upright given the current hold. Neutral-edge (two-player
+          faceToFace): pinned to the real screen's own left/right edge instead, vertically centered,
+          reachable and legible from either seat. */}
+      {neutralZone ? (
+        <>
+          <View style={[styles.neutralSlot, { left: insets.left + 8 }]}>
+            <IconButton icon='arrow-left' iconColor={bg} containerColor={fg} style={[styles.chipButton, rotationStyle]} size={24} onPress={onBackPress} />
+          </View>
+          <View style={[styles.neutralSlot, { right: insets.right + 8 }]}>
+            <IconButton icon='cog' iconColor={bg} containerColor={fg} style={[styles.chipButton, rotationStyle]} size={24} onPress={() => setSettingsOpen(true)} accessibilityLabel='Settings' />
+          </View>
+        </>
+      ) : (
+        <>
+          <View style={[styles.floatingChip, { left: backPos.x - 24, top: backPos.y - 24 }, rotationStyle]}>
+            <IconButton icon='arrow-left' iconColor={bg} containerColor={fg} style={styles.chipButton} size={24} onPress={onBackPress} />
+          </View>
+          <View style={[styles.floatingChip, { left: settingsPos.x - 24, top: settingsPos.y - 24 }, rotationStyle]}>
+            <IconButton icon='cog' iconColor={bg} containerColor={fg} style={styles.chipButton} size={24} onPress={() => setSettingsOpen(true)} accessibilityLabel='Settings' />
+          </View>
+        </>
+      )}
+
+      {/* Game Over overlay */}
+      {phase === 'gameOver' && (
+        <View style={styles.overlay}>
+          <View style={[styles.overlayCard, { backgroundColor: cardBg, borderColor: cardBorder }, rotationStyle]}>
+            <Icon source='trophy' size={64} color={playerColor[winner]} />
+            <Text variant='headlineLarge' style={[styles.overlayTitle, { color: playerColor[winner], fontFamily: MONO_FONT }]}>
+              Wins!
+            </Text>
+            {winnerProfile ? (
+              <View style={styles.winnerRow}>
+                <ProfileChip profile={winnerProfile} />
+                <Text variant='titleMedium' style={{ color: playerColor[winner], fontFamily: MONO_FONT }}>
+                  {winnerProfile.name}
+                </Text>
+              </View>
+            ) : (
+              <Text variant='titleMedium' style={{ color: playerColor[winner], fontFamily: MONO_FONT }}>
+                {winner === 1 ? 'P1' : 'P2'}
+              </Text>
+            )}
+            <Text variant='bodyLarge' style={[styles.overlayScore, { fontFamily: MONO_FONT }]}>
+              <Text style={{ color: playerColor[1] }}>{scores[0]}</Text>
+              <Text style={{ color: fgMuted }}> – </Text>
+              <Text style={{ color: playerColor[2] }}>{scores[1]}</Text>
+            </Text>
+            <Button mode='contained' onPress={() => resetGame(board)} style={styles.overlayButton} buttonColor={playerColor[loser]} textColor={playerOnColor[loser]}>
+              Play Again
+            </Button>
+            <Button mode='contained' onPress={() => router.back()} style={styles.overlayButton} buttonColor={playerColor[winner]} textColor={playerOnColor[winner]}>
+              Loadout
+            </Button>
+          </View>
+        </View>
+      )}
+
+      {/* Quit confirmation */}
+      {confirmBackVisible && (
+        <View style={styles.overlay}>
+          <View style={[styles.overlayCard, { backgroundColor: cardBg, borderColor: cardBorder }, rotationStyle]}>
+            <Icon source='alert-circle-outline' size={64} color={themeColors.secondary} />
+            <Text variant='headlineLarge' style={[styles.overlayTitle, { color: themeColors.secondary, fontFamily: MONO_FONT }]}>
+              Quit Match?
+            </Text>
+            <Text variant='bodyLarge' style={[styles.overlayScore, { fontFamily: MONO_FONT }]}>
+              <Text style={{ color: playerColor[1] }}>{scores[0]}</Text>
+              <Text style={{ color: fgMuted }}> – </Text>
+              <Text style={{ color: playerColor[2] }}>{scores[1]}</Text>
+            </Text>
+            <Button mode='contained' onPress={() => setConfirmBackVisible(false)} style={styles.overlayButton} buttonColor={themeColors.primary} textColor={themeColors.onPrimary}>
+              Cancel
+            </Button>
+            <Button mode='contained' onPress={safeBack} style={styles.overlayButton} buttonColor={themeColors.secondary} textColor={themeColors.onSecondary}>
+              Quit
+            </Button>
+          </View>
+        </View>
+      )}
+
+      {/* SettingsDialog doesn't yet accept a `rotation` prop the way BoxHockey's own does — out of
+          scope for this phase (only _layout.tsx/game.tsx/TouchInputLayer.tsx/Board.tsx are touched
+          here); it renders un-rotated for now regardless of live orientation. */}
+      <SettingsDialog visible={settingsOpen} onDismiss={() => setSettingsOpen(false)} />
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  chipButton: { margin: 0 },
+  floatingChip: { position: 'absolute' },
+  localContainer: { position: 'absolute' },
+  // neutralZone's own back/settings position — full screen height at a fixed left/right edge,
+  // button centered vertically via justifyContent, same shape as LightCycles'/BoxHockey's own
+  // neutral-midline chip slots (see neutralZone's own doc above for why).
+  neutralSlot: { alignItems: 'center', bottom: 0, justifyContent: 'center', position: 'absolute', top: 0 },
+  overlay: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.72)',
+    bottom: 0,
+    justifyContent: 'center',
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0
+  },
+  overlayButton: { width: 160 },
+  overlayCard: {
+    alignItems: 'center',
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 16,
+    padding: 32
+  },
+  overlayScore: {},
+  overlayTitle: { fontWeight: 'bold' },
+  root: { flex: 1 },
+  // Marginless — sits between the "Wins!" title and the score line, both of which already carry
+  // this card's own vertical gap (see overlayCard's own `gap`), so this row needs no extra spacing
+  // of its own to read as one more line in that same stack.
+  winnerRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8
+  }
+})

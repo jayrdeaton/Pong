@@ -1,0 +1,78 @@
+{
+  "expo": {
+    "name": "Pong",
+    "slug": "pong",
+    "version": "1.0.0",
+    "scheme": "pong",
+    "description": "A digital Pong game",
+    "orientation": "portrait",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "icon": "./assets/images/dark-icon.png",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.infinitetoken.Pong",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "icon": {
+        "dark": "./assets/images/dark-icon.png",
+        "light": "./assets/images/light-icon.png"
+      },
+      "entitlements": {
+        "com.apple.security.application-groups": [
+          "group.com.infinitetoken.tastic"
+        ]
+      }
+    },
+    "android": {
+      "package": "com.infinitetoken.pong"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/dark-icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "backgroundColor": "#FFFFFF",
+          "dark": {
+            "image": "./assets/images/splash-icon.png",
+            "backgroundColor": "#000000"
+          }
+        }
+      ],
+      "expo-status-bar",
+      "expo-asset",
+      "@tastic/edge-guard"
+    ],
+    "extra": {
+      "router": {}
+    },
+    "owner": "jayrdeaton"
+  }
+}
