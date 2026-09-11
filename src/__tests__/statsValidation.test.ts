@@ -18,6 +18,11 @@ describe('DEFAULT_STATS', () => {
   it('DEFAULT_PROFILE_STATS carries no nesting of its own', () => {
     expect('profiles' in DEFAULT_PROFILE_STATS).toBe(false)
   })
+
+  it('zeroes the solo bucket and the mode-agnostic bricksDestroyed counter', () => {
+    expect(DEFAULT_STATS.solo).toEqual({ played: 0, cleared: 0 })
+    expect(DEFAULT_STATS.bricksDestroyed).toBe(0)
+  })
 })
 
 describe('isValidStats', () => {
@@ -40,6 +45,15 @@ describe('isValidStats', () => {
   it('rejects a missing or malformed vsCpu bucket', () => {
     expect(isValidStats({ ...DEFAULT_STATS, vsCpu: undefined })).toBe(false)
     expect(isValidStats({ ...DEFAULT_STATS, vsCpu: { ...DEFAULT_STATS.vsCpu, byDifficulty: {} } })).toBe(false)
+  })
+
+  it('rejects a missing or malformed solo bucket', () => {
+    expect(isValidStats({ ...DEFAULT_STATS, solo: undefined })).toBe(false)
+    expect(isValidStats({ ...DEFAULT_STATS, solo: { played: 1 } })).toBe(false)
+  })
+
+  it('rejects a non-numeric bricksDestroyed', () => {
+    expect(isValidStats({ ...DEFAULT_STATS, bricksDestroyed: '5' })).toBe(false)
   })
 
   it('rejects a malformed points object', () => {

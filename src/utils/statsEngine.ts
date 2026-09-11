@@ -1,7 +1,7 @@
 import { applyDayPlayed, applyResult, applyResultToBucket, applyWinStreak, countBucketsWithAWin, resultFor, RoundResult } from '@tastic/achievements'
 import { Profile } from '@tastic/profile'
 
-import { AiDifficulty, BallSpeedLevel, GameMode, Player, ProfileStats, StatsState } from '@/types'
+import { AiDifficulty, BallSpeedLevel, GameMode, Player, ProfileStats, SoloStats, StatsState } from '@/types'
 import { DEFAULT_PROFILE_STATS } from '@/utils/statsValidation'
 
 // One finished match, as the stats layer sees it — built by game.tsx the instant phase flips to
@@ -19,6 +19,10 @@ export interface MatchContext {
   // Seat -> profile id, present only for seats with a saved profile selected. vsCpu's CPU seat
   // never has one, so the loop below only ever bumps the human's.
   profileIds?: Partial<Record<Player, string>>
+  // Only meaningful for the vsCpu/twoPlayer Bricks toggle — folded into the same mode-agnostic
+  // ProfileStats.bricksDestroyed counter solo also feeds (see applySoloOutcome), purely additive
+  // and otherwise doesn't touch this outcome's win-condition/scores handling at all.
+  bricksDestroyed?: number
 }
 
 // Pong has no draws — a match ends the instant one side reaches scoreToWin — so this only ever
@@ -58,17 +62,32 @@ function bumpForSeat(prev: ProfileStats, outcome: MatchOutcome, context: MatchCo
   return {
     vsCpu,
     twoPlayer,
+    // Untouched by a two-paddle match outcome — only applySoloOutcome's own bumpSoloForSeat below
+    // ever changes this bucket.
+    solo: prev.solo,
     points: { scored: prev.points.scored + scored, conceded: prev.points.conceded + conceded },
     shutouts: prev.shutouts + (won && conceded === 0 ? 1 : 0),
     bestWinMargin: won ? Math.max(prev.bestWinMargin, scored - conceded) : prev.bestWinMargin,
     bySpeed: applyResultToBucket(prev.bySpeed, context.ballSpeed, result) as Record<BallSpeedLevel, ReturnType<typeof applyResult>>,
+    bricksDestroyed: prev.bricksDestroyed + (context.bricksDestroyed ?? 0),
     ...applyDayPlayed(prev, now)
   }
 }
 
+// Solo's own bump, parallel to bumpForSeat above rather than routed through it — solo has no
+// opponent/score-tuple shape (MatchOutcome/MatchContext) to fit into, just a cleared/bricksDestroyed
+// result.
+function bumpSoloForSeat(prev: ProfileStats, result: { cleared: boolean; bricksDestroyed: number }, now: Date): ProfileStats {
+  const solo: SoloStats = { played: prev.solo.played + 1, cleared: prev.solo.cleared + (result.cleared ? 1 : 0) }
+  return { ...prev, solo, bricksDestroyed: prev.bricksDestroyed + result.bricksDestroyed, ...applyDayPlayed(prev, now) }
+}
+
 // `now` defaults to the real clock — overridable so tests can drive day boundaries directly.
 export function applyMatchOutcome(prev: StatsState, outcome: MatchOutcome, context: MatchContext, now: Date = new Date()): StatsState {
-  const isFirstGameEver = prev.vsCpu.played + prev.twoPlayer.played === 0
+  // + prev.solo.played: a device's very first game ever being a SOLO round must still count as
+  // "first ever" here, or a later non-solo game would wrongly re-treat itself as the debut (see
+  // applySoloOutcome's own identical extension, the other direction).
+  const isFirstGameEver = prev.vsCpu.played + prev.twoPlayer.played + prev.solo.played === 0
   const firstGameResult = isFirstGameEver ? seatResult(outcome, 1) : prev.firstGameResult
   const base = bumpForSeat(prev, outcome, context, 1, now, true)
 
@@ -84,12 +103,26 @@ export function applyMatchOutcome(prev: StatsState, outcome: MatchOutcome, conte
   return { ...base, profiles, firstGameResult }
 }
 
+// Solo's own outcome recorder, parallel to applyMatchOutcome above rather than routed through it —
+// see bumpSoloForSeat's own doc for why. profileId is singular (not a per-seat map) since solo only
+// ever has the one human seat.
+export function applySoloOutcome(prev: StatsState, result: { cleared: boolean; bricksDestroyed: number }, profileId: string | undefined, now: Date = new Date()): StatsState {
+  const isFirstGameEver = prev.vsCpu.played + prev.twoPlayer.played + prev.solo.played === 0
+  const firstGameResult = isFirstGameEver ? (result.cleared ? 'win' : 'loss') : prev.firstGameResult
+  const base = bumpSoloForSeat(prev, result, now)
+
+  let profiles = prev.profiles
+  if (profileId) profiles = { ...profiles, [profileId]: bumpSoloForSeat(profiles[profileId] ?? DEFAULT_PROFILE_STATS, result, now) }
+
+  return { ...base, profiles, firstGameResult }
+}
+
 export function getOverallTotals(stats: ProfileStats): { played: number; wins: number; losses: number } {
   const twoPlayerWins = stats.twoPlayer.p1Wins + stats.twoPlayer.p2Wins
   return {
-    played: stats.vsCpu.played + stats.twoPlayer.played,
-    wins: stats.vsCpu.wins + twoPlayerWins,
-    losses: stats.vsCpu.losses + (stats.twoPlayer.played - twoPlayerWins)
+    played: stats.vsCpu.played + stats.twoPlayer.played + stats.solo.played,
+    wins: stats.vsCpu.wins + twoPlayerWins + stats.solo.cleared,
+    losses: stats.vsCpu.losses + (stats.twoPlayer.played - twoPlayerWins) + (stats.solo.played - stats.solo.cleared)
   }
 }
 

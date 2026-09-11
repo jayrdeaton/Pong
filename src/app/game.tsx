@@ -16,7 +16,7 @@ import { SettingsDialog } from '@/components/SettingsDialog'
 import TouchInputLayer from '@/components/TouchInputLayer'
 import { ACHIEVEMENT_TIER_COLORS } from '@/constants/achievements'
 import { MONO_FONT } from '@/constants/fonts'
-import { DESKTOP_WEB_MIN_WIDTH } from '@/constants/game'
+import { DESKTOP_WEB_MIN_WIDTH, SOLO_LIVES } from '@/constants/game'
 import { useAIOpponent } from '@/hooks/useAIOpponent'
 import { useGameSettings } from '@/hooks/useGameSettings'
 import { useGameSound } from '@/hooks/useGameSound'
@@ -58,15 +58,16 @@ export default function GameScreen() {
   // Committed once by /loadout when every human player readied up — falls back to defaults for a
   // direct/deep link to this screen, which never went through /loadout to commit anything.
   const { activeRoundSettings } = useGameSettings()
-  const { recordMatchOutcome } = useGameStats()
+  const { recordMatchOutcome, recordSoloOutcome } = useGameStats()
   const { success: showAchievementToast } = useToast()
   const roundSettings = activeRoundSettings ?? DEFAULT_SETTINGS
   const scoreToWin = roundSettings.scoreToWin
   const paddleSize = roundSettings.paddleSize
   const ballSpeed = roundSettings.ballSpeed
+  const isSolo = roundSettings.gameMode === 'solo'
   // Only P2 can be CPU-controlled — pass-and-play stays the default, single-player just swaps who
   // controls P2's paddle (see useAIOpponent, which drives it through the exact same setPaddleTarget
-  // path a human's touch uses).
+  // path a human's touch uses). null for solo too — there's no seat 2 to control at all.
   const aiPlayer: Player | null = roundSettings.gameMode === 'vsCpu' ? 2 : null
   const aiDifficulty = roundSettings.aiDifficulty
   const humanPlayers = humanPlayersFor(roundSettings.gameMode)
@@ -107,7 +108,14 @@ export default function GameScreen() {
   // rotating through both faceToFace placements and flipped if player 1's paddle doesn't end up
   // nearest whichever seat is holding the device's own "right-side-up" reading direction.
   const { orientationMode, upsideDown } = useAccelerometerOrientation(roundSettings.lockOrientation)
-  const rotation: 0 | 90 | -90 = orientationMode === 'faceToFace' ? (upsideDown ? -90 : 90) : 0
+  // vsCpu always seats the sole human at player 1 (see humanPlayersFor) — pin them to the visual
+  // bottom of a portrait/faceToFace hold, the natural single-hand grip, rather than the ±90/
+  // upsideDown pairing above. That pairing is tuned for two-player pass-and-play, where either seat
+  // is equally valid and the upsideDown compensation instead keeps player 1 consistently reading
+  // upright from whichever seat physically picked up the device — a meaningless distinction with
+  // only one seat, and one that happens to land the lone human at the TOP (CPU at the bottom) for
+  // the common upsideDown===false hold, backwards from where a solo player's thumb actually is.
+  const rotation: 0 | 90 | -90 = orientationMode !== 'faceToFace' ? 0 : aiPlayer !== null ? (upsideDown ? 90 : -90) : upsideDown ? -90 : 90
 
   const { width, height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
@@ -131,8 +139,8 @@ export default function GameScreen() {
   const [confirmBackVisible, setConfirmBackVisible] = useState(false)
   const paused = settingsOpen || confirmBackVisible
 
-  const { state, setPaddleTarget, resetGame } = useGameState(board, scoreToWin, ballSpeed, paused)
-  const { phase, ball, paddles, scores, bounceCount } = state
+  const { state, setPaddleTarget, resetGame } = useGameState(board, scoreToWin, ballSpeed, roundSettings.gameMode, roundSettings.bricksEnabled, paused)
+  const { phase, ball, paddles, scores, bounceCount, bricks, lives } = state
 
   useAIOpponent(state, board, aiPlayer, aiDifficulty, paused, setPaddleTarget)
 
@@ -174,7 +182,10 @@ export default function GameScreen() {
   soundRef.current = { playBounce, playGoal, playWin }
 
   const onBackPress = () => {
-    if (scores[0] > 0 || scores[1] > 0) setConfirmBackVisible(true)
+    // scores stays [0,0] the whole round in solo (see useGameState's TICK case) — a lost life or a
+    // broken brick is solo's own equivalent of "there's progress worth confirming before losing it".
+    const hasProgress = isSolo ? lives < SOLO_LIVES || bricks.some((b) => b.destroyed) : scores[0] > 0 || scores[1] > 0
+    if (hasProgress) setConfirmBackVisible(true)
     else safeBack()
   }
 
@@ -204,16 +215,29 @@ export default function GameScreen() {
       soundRef.current.playWin()
       // Recorded on the transition rather than in the reducer, which runs every physics step and
       // has no notion of "this is new". prevPhaseRef guards a re-run from any other dep changing.
-      const matchWinner: Player = scores[0] >= scoreToWin ? 1 : 2
-      const profileIds = { 1: lastSelected[1] ?? undefined, 2: aiPlayer === null ? (lastSelected[2] ?? undefined) : undefined }
-      const result = recordMatchOutcome({ winner: matchWinner, scores: [scores[0], scores[1]] }, { gameMode: roundSettings.gameMode, aiDifficulty, ballSpeed, profileIds })
-      const seatUnlocks = aiPlayer === null ? [...(result.profiles[1] ?? []), ...(result.profiles[2] ?? [])] : (result.profiles[1] ?? [])
-      ;[...result.device, ...seatUnlocks].forEach((achievement) => {
-        showAchievementToast(achievement.title, 'Achievement unlocked', undefined, { color: ACHIEVEMENT_TIER_COLORS[achievement.tier], icon: achievement.icon })
-      })
+      if (isSolo) {
+        // Solo has no opponent/score-tuple shape to fit into MatchOutcome — a genuinely separate
+        // recording path (see recordSoloOutcome), not a solo-shaped MatchOutcome. lives > 0 at
+        // gameOver means every brick was cleared (see useGameState's TICK case); lives <= 0 means
+        // the player ran out.
+        const result = recordSoloOutcome({ cleared: lives > 0, bricksDestroyed: bricks.filter((b) => b.destroyed).length }, lastSelected[1] ?? undefined)
+        ;[...result.device, ...(result.profiles[1] ?? [])].forEach((achievement) => {
+          showAchievementToast(achievement.title, 'Achievement unlocked', undefined, { color: ACHIEVEMENT_TIER_COLORS[achievement.tier], icon: achievement.icon })
+        })
+      } else {
+        const matchWinner: Player = scores[0] >= scoreToWin ? 1 : 2
+        const profileIds = { 1: lastSelected[1] ?? undefined, 2: aiPlayer === null ? (lastSelected[2] ?? undefined) : undefined }
+        // bricksDestroyed is 0 whenever the Bricks toggle was off for this round — correctly a
+        // no-op add to the shared counter, not something that needs its own on/off branch here.
+        const result = recordMatchOutcome({ winner: matchWinner, scores: [scores[0], scores[1]] }, { gameMode: roundSettings.gameMode, aiDifficulty, ballSpeed, profileIds, bricksDestroyed: bricks.filter((b) => b.destroyed).length })
+        const seatUnlocks = aiPlayer === null ? [...(result.profiles[1] ?? []), ...(result.profiles[2] ?? [])] : (result.profiles[1] ?? [])
+        ;[...result.device, ...seatUnlocks].forEach((achievement) => {
+          showAchievementToast(achievement.title, 'Achievement unlocked', undefined, { color: ACHIEVEMENT_TIER_COLORS[achievement.tier], icon: achievement.icon })
+        })
+      }
     }
     prevPhaseRef.current = phase
-  }, [phase, scores, scoreToWin, aiPlayer, aiDifficulty, ballSpeed, lastSelected, roundSettings.gameMode, recordMatchOutcome, showAchievementToast])
+  }, [phase, scores, scoreToWin, aiPlayer, aiDifficulty, ballSpeed, lastSelected, roundSettings.gameMode, recordMatchOutcome, isSolo, lives, bricks, recordSoloOutcome, showAchievementToast])
 
   // ─── Floating UI placement ─────────────────────────────────────────────────
   // Score labels and the back/settings buttons all live OUTSIDE the board's own rotated container
@@ -277,7 +301,7 @@ export default function GameScreen() {
           rotationStyle
         ]}
       >
-        <Board board={board} ball={ball} paddles={paddles} phase={phase} showWalls={isDesktopWeb} />
+        <Board board={board} ball={ball} paddles={paddles} phase={phase} showWalls={isDesktopWeb} bricks={bricks} soloMode={isSolo} />
       </View>
 
       {/* Touch input — deliberately a SIBLING of the board's own rotated container, not nested
@@ -335,40 +359,62 @@ export default function GameScreen() {
         </>
       )}
 
-      {/* Game Over overlay */}
-      {phase === 'gameOver' && (
-        <View style={styles.overlay}>
-          <View style={[styles.overlayCard, { backgroundColor: cardBg, borderColor: cardBorder }, rotationStyle]}>
-            <Icon source='trophy' size={64} color={playerColor[winner]} />
-            <Text variant='headlineLarge' style={[styles.overlayTitle, { color: playerColor[winner], fontFamily: MONO_FONT }]}>
-              Wins!
-            </Text>
-            {winnerProfile ? (
-              <View style={styles.winnerRow}>
-                <ProfileChip profile={winnerProfile} />
-                <Text variant='titleMedium' style={{ color: playerColor[winner], fontFamily: MONO_FONT }}>
-                  {winnerProfile.name}
-                </Text>
-              </View>
-            ) : (
-              <Text variant='titleMedium' style={{ color: playerColor[winner], fontFamily: MONO_FONT }}>
-                {winner === 1 ? 'P1' : 'P2'}
+      {/* Game Over overlay — solo has no opponent, so it gets its own branch entirely: lives > 0
+          means every brick was cleared (a win), lives <= 0 means the player ran out (see
+          useGameState's TICK case) — there's no "loser" to speak of, so both buttons just use
+          playerColor[1] rather than the winner/loser pairing the two-paddle branch below uses. */}
+      {phase === 'gameOver' &&
+        (isSolo ? (
+          <View style={styles.overlay}>
+            <View style={[styles.overlayCard, { backgroundColor: cardBg, borderColor: cardBorder }, rotationStyle]}>
+              <Icon source={lives > 0 ? 'trophy' : 'heart-broken'} size={64} color={playerColor[1]} />
+              <Text variant='headlineLarge' style={[styles.overlayTitle, { color: playerColor[1], fontFamily: MONO_FONT }]}>
+                {lives > 0 ? 'Cleared!' : 'Out of Lives'}
               </Text>
-            )}
-            <Text variant='bodyLarge' style={[styles.overlayScore, { fontFamily: MONO_FONT }]}>
-              <Text style={{ color: playerColor[1] }}>{scores[0]}</Text>
-              <Text style={{ color: fgMuted }}> – </Text>
-              <Text style={{ color: playerColor[2] }}>{scores[1]}</Text>
-            </Text>
-            <Button mode='contained' onPress={() => resetGame(board)} style={styles.overlayButton} buttonColor={playerColor[loser]} textColor={playerOnColor[loser]}>
-              Play Again
-            </Button>
-            <Button mode='contained' onPress={() => router.back()} style={styles.overlayButton} buttonColor={playerColor[winner]} textColor={playerOnColor[winner]}>
-              Loadout
-            </Button>
+              <Text variant='bodyLarge' style={[styles.overlayScore, { color: fgMuted, fontFamily: MONO_FONT }]}>
+                {bricks.filter((b) => b.destroyed).length} / {bricks.length} bricks
+              </Text>
+              <Button mode='contained' onPress={() => resetGame(board)} style={styles.overlayButton} buttonColor={playerColor[1]} textColor={playerOnColor[1]}>
+                Play Again
+              </Button>
+              <Button mode='contained' onPress={() => router.back()} style={styles.overlayButton} buttonColor={playerColor[1]} textColor={playerOnColor[1]}>
+                Loadout
+              </Button>
+            </View>
           </View>
-        </View>
-      )}
+        ) : (
+          <View style={styles.overlay}>
+            <View style={[styles.overlayCard, { backgroundColor: cardBg, borderColor: cardBorder }, rotationStyle]}>
+              <Icon source='trophy' size={64} color={playerColor[winner]} />
+              <Text variant='headlineLarge' style={[styles.overlayTitle, { color: playerColor[winner], fontFamily: MONO_FONT }]}>
+                Wins!
+              </Text>
+              {winnerProfile ? (
+                <View style={styles.winnerRow}>
+                  <ProfileChip profile={winnerProfile} />
+                  <Text variant='titleMedium' style={{ color: playerColor[winner], fontFamily: MONO_FONT }}>
+                    {winnerProfile.name}
+                  </Text>
+                </View>
+              ) : (
+                <Text variant='titleMedium' style={{ color: playerColor[winner], fontFamily: MONO_FONT }}>
+                  {winner === 1 ? 'P1' : 'P2'}
+                </Text>
+              )}
+              <Text variant='bodyLarge' style={[styles.overlayScore, { fontFamily: MONO_FONT }]}>
+                <Text style={{ color: playerColor[1] }}>{scores[0]}</Text>
+                <Text style={{ color: fgMuted }}> – </Text>
+                <Text style={{ color: playerColor[2] }}>{scores[1]}</Text>
+              </Text>
+              <Button mode='contained' onPress={() => resetGame(board)} style={styles.overlayButton} buttonColor={playerColor[loser]} textColor={playerOnColor[loser]}>
+                Play Again
+              </Button>
+              <Button mode='contained' onPress={() => router.back()} style={styles.overlayButton} buttonColor={playerColor[winner]} textColor={playerOnColor[winner]}>
+                Loadout
+              </Button>
+            </View>
+          </View>
+        ))}
 
       {/* Quit confirmation */}
       {confirmBackVisible && (
@@ -378,11 +424,17 @@ export default function GameScreen() {
             <Text variant='headlineLarge' style={[styles.overlayTitle, { color: themeColors.secondary, fontFamily: MONO_FONT }]}>
               Quit Match?
             </Text>
-            <Text variant='bodyLarge' style={[styles.overlayScore, { fontFamily: MONO_FONT }]}>
-              <Text style={{ color: playerColor[1] }}>{scores[0]}</Text>
-              <Text style={{ color: fgMuted }}> – </Text>
-              <Text style={{ color: playerColor[2] }}>{scores[1]}</Text>
-            </Text>
+            {isSolo ? (
+              <Text variant='bodyLarge' style={[styles.overlayScore, { color: fgMuted, fontFamily: MONO_FONT }]}>
+                {lives} {lives === 1 ? 'life' : 'lives'} · {bricks.filter((b) => b.destroyed).length} / {bricks.length} bricks
+              </Text>
+            ) : (
+              <Text variant='bodyLarge' style={[styles.overlayScore, { fontFamily: MONO_FONT }]}>
+                <Text style={{ color: playerColor[1] }}>{scores[0]}</Text>
+                <Text style={{ color: fgMuted }}> – </Text>
+                <Text style={{ color: playerColor[2] }}>{scores[1]}</Text>
+              </Text>
+            )}
             <Button mode='contained' onPress={() => setConfirmBackVisible(false)} style={styles.overlayButton} buttonColor={themeColors.primary} textColor={themeColors.onPrimary}>
               Cancel
             </Button>
@@ -393,10 +445,11 @@ export default function GameScreen() {
         </View>
       )}
 
-      {/* SettingsDialog doesn't yet accept a `rotation` prop the way BoxHockey's own does — out of
-          scope for this phase (only _layout.tsx/game.tsx/TouchInputLayer.tsx/Board.tsx are touched
-          here); it renders un-rotated for now regardless of live orientation. */}
-      <SettingsDialog visible={settingsOpen} onDismiss={() => setSettingsOpen(false)} />
+      {/* rotation={rotation} — same physical-hold-compensating rotation the board itself uses (see
+          the rotation comment above), not a separate reading; previously omitted, leaving this
+          dialog's content stuck unrotated for a faceToFace hold while every other floating card on
+          this screen correctly rotated. */}
+      <SettingsDialog visible={settingsOpen} onDismiss={() => setSettingsOpen(false)} rotation={rotation} />
     </View>
   )
 }

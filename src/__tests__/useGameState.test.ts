@@ -1,4 +1,4 @@
-import { BALL_SPEED_TIERS } from '@/constants/game'
+import { BALL_SPEED_TIERS, SOLO_LIVES } from '@/constants/game'
 import { makeReducer } from '@/hooks/useGameState'
 import { GameState } from '@/types'
 import { computeBoardLayout } from '@/utils/board'
@@ -10,7 +10,7 @@ function idleState(): GameState {
   return makeReducer(5, 'medium')(
     // Seed via RESET so the fixture always matches makeInitialState's own shape, rather than
     // hand-duplicating it here and risking drift — same discipline AirHockey's own test file uses.
-    { phase: 'idle', scores: [0, 0], ball: { x: 0, y: 0, vx: 0, vy: 0, speed: 0 }, paddles: { 1: { x: 0, y: 0, vx: 0, vy: 0 }, 2: { x: 0, y: 0, vx: 0, vy: 0 } }, lastScoredBy: null, bounceCount: 0 },
+    { phase: 'idle', scores: [0, 0], ball: { x: 0, y: 0, vx: 0, vy: 0, speed: 0 }, paddles: { 1: { x: 0, y: 0, vx: 0, vy: 0 }, 2: { x: 0, y: 0, vx: 0, vy: 0 } }, lastScoredBy: null, bounceCount: 0, bricks: [], lives: 0 },
     { type: 'RESET', board }
   )
 }
@@ -205,5 +205,97 @@ describe('TICK substep loop — tunneling regression', () => {
     // caught a collision a single-pass integration would have missed entirely.
     expect(next.ball.vx).toBeGreaterThan(0)
     expect(next.scores).toEqual([0, 0])
+  })
+})
+
+describe('TICK substep loop — brick tunneling regression', () => {
+  it('a near-maxSpeed ball aimed at a stationary brick does not tunnel through un-collided within one TICK at a large dt', () => {
+    // bricksEnabled on a twoPlayer reducer — exercises the shared brick infrastructure via the
+    // Bricks toggle path, same substep/collision code solo also relies on.
+    const reducer = makeReducer(5, 'medium', 'twoPlayer', true)
+    const state = reducer(reducer({ phase: 'idle', scores: [0, 0], ball: { x: 0, y: 0, vx: 0, vy: 0, speed: 0 }, paddles: { 1: { x: 0, y: 0, vx: 0, vy: 0 }, 2: { x: 0, y: 0, vx: 0, vy: 0 } }, lastScoredBy: null, bounceCount: 0, bricks: [], lives: 0 }, { type: 'RESET', board }), { type: 'START', random: () => 0.5 })
+    const maxSpeed = BALL_SPEED_TIERS.medium.max
+    // A single brick, mid-court and clear of both paddles — isolates brick-tunneling safety from
+    // paddle collision entirely, same discipline as the paddle tunneling test above.
+    const brick = { x: board.centerX - 10, y: board.centerY - 40, width: 20, height: 80, destroyed: false }
+    const targets = { 1: state.paddles[1].y, 2: state.paddles[2].y }
+    const ball = { x: brick.x + brick.width + 20, y: board.centerY, vx: -maxSpeed, vy: 0, speed: maxSpeed }
+    // random: () => 0.5 -> exactly zero brick-bounce jitter (see applyBrickCollision), keeping this
+    // test's reflection pure geometry.
+    const next = reducer({ ...state, bricks: [brick], ball }, { type: 'TICK', board, dt: 2.5, targets, random: () => 0.5 })
+    expect(next.ball.vx).toBeGreaterThan(0) // reflected back rightward, away from the brick — not tunneled through
+    expect(next.bricks[0].destroyed).toBe(true)
+  })
+})
+
+describe('solo/Brickbreaker', () => {
+  function soloIdleState(): GameState {
+    return makeReducer(5, 'medium', 'solo', false)({ phase: 'idle', scores: [0, 0], ball: { x: 0, y: 0, vx: 0, vy: 0, speed: 0 }, paddles: { 1: { x: 0, y: 0, vx: 0, vy: 0 }, 2: { x: 0, y: 0, vx: 0, vy: 0 } }, lastScoredBy: null, bounceCount: 0, bricks: [], lives: 0 }, { type: 'RESET', board })
+  }
+
+  function soloLiveState(random: () => number = () => 0.5): GameState {
+    return makeReducer(5, 'medium', 'solo', false)(soloIdleState(), { type: 'START', random })
+  }
+
+  it('RESET seeds a full brick field and SOLO_LIVES lives — bricksEnabled is irrelevant, solo is unconditionally Brickbreaker', () => {
+    const state = soloIdleState()
+    expect(state.lives).toBe(SOLO_LIVES)
+    expect(state.bricks.length).toBeGreaterThan(0)
+    expect(state.bricks.every((b) => !b.destroyed)).toBe(true)
+  })
+
+  it("START always serves rightward into the field — never the coin flip a two-paddle match's first serve gets", () => {
+    // random: () => 0.9 would serve LEFT (toward P1) if this were a coin-flip match (see
+    // physics.test.ts's 'is a coin flip in direction' test) — solo ignores that draw entirely.
+    const state = makeReducer(5, 'medium', 'solo', false)(soloIdleState(), { type: 'START', random: () => 0.9 })
+    expect(state.ball.vx).toBeGreaterThan(0)
+  })
+
+  it('a miss decrements lives and transitions to pointScored while lives remain, with lastScoredBy fixed at 1', () => {
+    const reducer = makeReducer(5, 'medium', 'solo', false)
+    const state = soloLiveState()
+    const clearOfPaddle1 = board.paddleX[1] - board.paddleWidth / 2 - board.ballRadius - 5
+    const targets = { 1: state.paddles[1].y, 2: state.paddles[2].y }
+    const after = reducer({ ...state, ball: { x: clearOfPaddle1, y: board.centerY, vx: -30, vy: 0, speed: 30 } }, { type: 'TICK', board, dt: 1, targets })
+    expect(after.lives).toBe(SOLO_LIVES - 1)
+    expect(after.phase).toBe('pointScored')
+    // Not "who scored" (solo has no opponent) — fixed at 1 so POINT_SERVE's otherPlayer(lastScoredBy)
+    // still resolves to 2, correctly re-serving away from the player and into the field.
+    expect(after.lastScoredBy).toBe(1)
+  })
+
+  it('exhausting lives ends the round as a loss', () => {
+    const reducer = makeReducer(5, 'medium', 'solo', false)
+    const state = { ...soloLiveState(), lives: 1 }
+    const clearOfPaddle1 = board.paddleX[1] - board.paddleWidth / 2 - board.ballRadius - 5
+    const targets = { 1: state.paddles[1].y, 2: state.paddles[2].y }
+    const after = reducer({ ...state, ball: { x: clearOfPaddle1, y: board.centerY, vx: -30, vy: 0, speed: 30 } }, { type: 'TICK', board, dt: 1, targets })
+    expect(after.lives).toBe(0)
+    expect(after.phase).toBe('gameOver')
+  })
+
+  it('clearing every brick ends the round as a win, leaving lives untouched', () => {
+    const reducer = makeReducer(5, 'medium', 'solo', false)
+    const state = soloLiveState()
+    const bricks = state.bricks.map((b) => ({ ...b, destroyed: true }))
+    const targets = { 1: state.paddles[1].y, 2: state.paddles[2].y }
+    // Harmlessly mid-court, nowhere near an edge — the win comes from the bricks-cleared check
+    // itself, not an incidental score/edge event landing in the same tick.
+    const ball = { x: board.centerX, y: board.centerY, vx: 1, vy: 0, speed: 1 }
+    const after = reducer({ ...state, bricks, ball }, { type: 'TICK', board, dt: 1, targets })
+    expect(after.phase).toBe('gameOver')
+    expect(after.lives).toBe(SOLO_LIVES)
+  })
+
+  it('never collides against paddle 2 — the far edge bounces with no speed ratchet, unlike a paddle hit', () => {
+    const reducer = makeReducer(5, 'medium', 'solo', false)
+    const state = soloLiveState()
+    const clearOfPaddle2 = board.paddleX[2] + board.paddleWidth / 2 + board.ballRadius + 5
+    const targets = { 1: state.paddles[1].y, 2: state.paddles[2].y }
+    const ball = { x: clearOfPaddle2, y: board.centerY, vx: 30, vy: 0, speed: 30 }
+    const after = reducer({ ...state, ball }, { type: 'TICK', board, dt: 1, targets })
+    expect(after.ball.vx).toBeLessThan(0) // bounced back leftward off the far wall
+    expect(after.ball.speed).toBeCloseTo(30, 5) // unchanged — a paddle hit would have ratcheted this up
+    expect(after.phase).toBe('live')
   })
 })

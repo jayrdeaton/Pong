@@ -1,7 +1,7 @@
 import { Profile } from '@tastic/profile'
 
 import { StatsState } from '@/types'
-import { applyMatchOutcome, getOverallTotals, getProfileRankings, getProfileStatsView, getSpeedsWon, MatchContext, MatchOutcome } from '@/utils/statsEngine'
+import { applyMatchOutcome, applySoloOutcome, getOverallTotals, getProfileRankings, getProfileStatsView, getSpeedsWon, MatchContext, MatchOutcome } from '@/utils/statsEngine'
 import { DEFAULT_PROFILE_STATS, DEFAULT_STATS } from '@/utils/statsValidation'
 
 const VS_CPU: MatchContext = { gameMode: 'vsCpu', aiDifficulty: 'medium', ballSpeed: 'medium' }
@@ -178,11 +178,70 @@ describe('day streak', () => {
   })
 })
 
+describe('applySoloOutcome', () => {
+  it('records a clear as a win and folds bricksDestroyed into the mode-agnostic counter', () => {
+    const s = applySoloOutcome(DEFAULT_STATS, { cleared: true, bricksDestroyed: 48 }, undefined, new Date(2026, 8, 2))
+    expect(s.solo).toEqual({ played: 1, cleared: 1 })
+    expect(s.bricksDestroyed).toBe(48)
+  })
+
+  it('records running out of lives as a play without a clear', () => {
+    const s = applySoloOutcome(DEFAULT_STATS, { cleared: false, bricksDestroyed: 12 }, undefined, new Date(2026, 8, 2))
+    expect(s.solo).toEqual({ played: 1, cleared: 0 })
+    expect(s.bricksDestroyed).toBe(12)
+  })
+
+  it('attributes the result to the given profile in addition to the device-wide bucket', () => {
+    const s = applySoloOutcome(DEFAULT_STATS, { cleared: true, bricksDestroyed: 48 }, 'alice', new Date(2026, 8, 2))
+    expect(s.profiles.alice.solo).toEqual({ played: 1, cleared: 1 })
+    expect(s.profiles.alice.bricksDestroyed).toBe(48)
+  })
+
+  it('never creates a profile entry when no profileId is given', () => {
+    expect(applySoloOutcome(DEFAULT_STATS, { cleared: true, bricksDestroyed: 48 }, undefined, new Date(2026, 8, 2)).profiles).toEqual({})
+  })
+
+  it('does not touch the vsCpu or twoPlayer buckets', () => {
+    const s = applySoloOutcome(DEFAULT_STATS, { cleared: true, bricksDestroyed: 48 }, undefined, new Date(2026, 8, 2))
+    expect(s.vsCpu.played).toBe(0)
+    expect(s.twoPlayer.played).toBe(0)
+  })
+
+  it('sets firstGameResult when a solo round is the very first game ever, on either outcome', () => {
+    expect(applySoloOutcome(DEFAULT_STATS, { cleared: true, bricksDestroyed: 48 }, undefined).firstGameResult).toBe('win')
+    expect(applySoloOutcome(DEFAULT_STATS, { cleared: false, bricksDestroyed: 0 }, undefined).firstGameResult).toBe('loss')
+  })
+
+  it("a solo debut's firstGameResult is never later overwritten by a non-solo match — the two paths share one first-ever check", () => {
+    let s = applySoloOutcome(DEFAULT_STATS, { cleared: false, bricksDestroyed: 5 }, undefined)
+    expect(s.firstGameResult).toBe('loss')
+    s = play(s, win([7, 1]), VS_CPU)
+    expect(s.firstGameResult).toBe('loss')
+  })
+})
+
+describe('applyMatchOutcome — bricksDestroyed context (vsCpu/twoPlayer Bricks toggle)', () => {
+  it('folds an optional bricksDestroyed count into the shared, mode-agnostic counter', () => {
+    expect(play(DEFAULT_STATS, win([7, 1]), { ...VS_CPU, bricksDestroyed: 15 }).bricksDestroyed).toBe(15)
+  })
+
+  it('defaults to 0 when omitted (bricks were off this round), leaving the counter untouched', () => {
+    expect(play(DEFAULT_STATS, win([7, 1])).bricksDestroyed).toBe(0)
+  })
+})
+
 describe('selectors', () => {
   it('getOverallTotals sums both modes', () => {
     let s = play(DEFAULT_STATS, win([7, 1]))
     s = play(s, win([1, 7]))
     s = play(s, win([7, 3]), TWO_PLAYER)
+    expect(getOverallTotals(s)).toEqual({ played: 3, wins: 2, losses: 1 })
+  })
+
+  it('getOverallTotals folds in solo plays/clears too', () => {
+    let s = play(DEFAULT_STATS, win([7, 1]))
+    s = applySoloOutcome(s, { cleared: true, bricksDestroyed: 48 }, undefined)
+    s = applySoloOutcome(s, { cleared: false, bricksDestroyed: 10 }, undefined)
     expect(getOverallTotals(s)).toEqual({ played: 3, wins: 2, losses: 1 })
   })
 

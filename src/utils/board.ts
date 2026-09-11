@@ -1,8 +1,8 @@
 import { Platform } from 'react-native'
 import { EdgeInsets } from 'react-native-safe-area-context'
 
-import { BALL_RADIUS_RATIO, DESKTOP_WEB_MIN_WIDTH, PADDLE_HEIGHT_RATIOS, PADDLE_INSET_RATIO, PADDLE_WIDTH_RATIO, TABLE_WIDTH_TO_HEIGHT_RATIO, WALL_THICKNESS } from '@/constants/game'
-import { BoardLayout, PaddleSizeLevel, Player } from '@/types'
+import { BALL_RADIUS_RATIO, BRICK_GAP_RATIO, DESKTOP_WEB_MIN_WIDTH, PADDLE_HEIGHT_RATIOS, PADDLE_INSET_RATIO, PADDLE_WIDTH_RATIO, SHARED_BRICK_COLS, SHARED_BRICK_FIELD_WIDTH_RATIO, SHARED_BRICK_FIELD_Y_MARGIN_RATIO, SHARED_BRICK_ROWS, SOLO_BRICK_COLS, SOLO_BRICK_FIELD_X_END_RATIO, SOLO_BRICK_FIELD_X_START_RATIO, SOLO_BRICK_FIELD_Y_MARGIN_RATIO, SOLO_BRICK_ROWS, TABLE_WIDTH_TO_HEIGHT_RATIO, WALL_THICKNESS } from '@/constants/game'
+import { BoardLayout, Brick, PaddleSizeLevel, Player } from '@/types'
 
 // Mirrors AirHockey's own isDesktopLayout — desktop web is the only context that fixes the board
 // to a fixed aspect ratio (TABLE_WIDTH_TO_HEIGHT_RATIO) rather than filling the viewport exactly.
@@ -75,6 +75,62 @@ export function centerPaddle(board: BoardLayout, player: Player): { x: number; y
 // target selection, same as AirHockey.
 export function clampPaddleY(y: number, board: BoardLayout): number {
   return Math.min(board.paddleMaxY, Math.max(board.paddleMinY, y))
+}
+
+// Evenly divides [x0,x1]×[y0,y1] into a cols×rows grid, each cell inset by `gap` (split evenly on
+// both sides) so neighboring bricks never touch. x/y are top-left corners, matching @tastic/
+// physics's circleVsRect and ObstacleRect's own rect convention (not center-based, unlike a paddle
+// rect — see applyPaddleCollision's own center-to-corner conversion in utils/physics.ts).
+function packBrickGrid(x0: number, y0: number, x1: number, y1: number, cols: number, rows: number, gap: number): Omit<Brick, 'destroyed'>[] {
+  const cellWidth = (x1 - x0) / cols
+  const cellHeight = (y1 - y0) / rows
+  const width = cellWidth - gap
+  const height = cellHeight - gap
+  const bricks: Omit<Brick, 'destroyed'>[] = []
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      bricks.push({ x: x0 + col * cellWidth + gap / 2, y: y0 + row * cellHeight + gap / 2, width, height })
+    }
+  }
+  return bricks
+}
+
+// Full-court field for solo/Brickbreaker — leaves runway near paddle 1 and a margin before the far
+// wall, rather than spanning edge to edge.
+export function buildSoloBrickField(board: BoardLayout): Brick[] {
+  const gap = board.height * BRICK_GAP_RATIO
+  const x0 = board.x + board.width * SOLO_BRICK_FIELD_X_START_RATIO
+  const x1 = board.x + board.width * SOLO_BRICK_FIELD_X_END_RATIO
+  const y0 = board.y + board.height * SOLO_BRICK_FIELD_Y_MARGIN_RATIO
+  const y1 = board.y + board.height * (1 - SOLO_BRICK_FIELD_Y_MARGIN_RATIO)
+  return packBrickGrid(x0, y0, x1, y1, SOLO_BRICK_COLS, SOLO_BRICK_ROWS, gap).map((b) => ({ ...b, destroyed: false }))
+}
+
+// Smaller mid-court field for the vsCpu/twoPlayer Bricks toggle, centered on the court. A paddle
+// only ever moves in Y at a fixed X (board.paddleX), so a block centered on centerX can never
+// overlap either paddle's reachable area regardless of its height.
+export function buildSharedBrickField(board: BoardLayout): Brick[] {
+  const gap = board.height * BRICK_GAP_RATIO
+  const halfWidth = (board.width * SHARED_BRICK_FIELD_WIDTH_RATIO) / 2
+  const x0 = board.centerX - halfWidth
+  const x1 = board.centerX + halfWidth
+  const y0 = board.y + board.height * SHARED_BRICK_FIELD_Y_MARGIN_RATIO
+  const y1 = board.y + board.height * (1 - SHARED_BRICK_FIELD_Y_MARGIN_RATIO)
+  return packBrickGrid(x0, y0, x1, y1, SHARED_BRICK_COLS, SHARED_BRICK_ROWS, gap).map((b) => ({ ...b, destroyed: false }))
+}
+
+// Board-change remap for bricks — same fractional-remap technique as useGameState.ts's own
+// rescaleBall (kept here rather than there since it's pure board-geometry math, no game-state
+// concerns). destroyed carries straight through unchanged; only geometry is remapped.
+export function rescaleBricks(bricks: Brick[], prevBoard: BoardLayout, board: BoardLayout): Brick[] {
+  const degenerate = prevBoard.width <= 0 || prevBoard.height <= 0
+  const scaleX = degenerate ? 1 : board.width / prevBoard.width
+  const scaleY = degenerate ? 1 : board.height / prevBoard.height
+  return bricks.map((b) => {
+    const fx = degenerate ? 0.5 : (b.x - prevBoard.x) / prevBoard.width
+    const fy = degenerate ? 0.5 : (b.y - prevBoard.y) / prevBoard.height
+    return { ...b, x: board.x + fx * board.width, y: board.y + fy * board.height, width: b.width * scaleX, height: b.height * scaleY }
+  })
 }
 
 // NOTE on the orientation layer built on top of this (see the plan file + BoxHockey source for

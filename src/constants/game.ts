@@ -20,6 +20,13 @@ export const PADDLE_HEIGHT_RATIOS: Record<PaddleSizeLevel, number> = { small: 0.
 export const PADDLE_VELOCITY_SMOOTHING_FRAMES = 3 // unchanged from AirHockey
 export const MAX_PADDLE_SPEED = 26 // unchanged from AirHockey
 
+// How many frames the AI's own aim-error wanders over (see useAIOpponent) — a fresh Math.random()
+// draw is re-EMA'd into a persisted value at this rate rather than fed straight into
+// computeAIPaddleTarget's jitter formula each tick, so the AI's imprecision drifts smoothly like a
+// real opponent's wavering aim instead of snapping to a brand-new independent offset 60 times a
+// second, which is what actually read as paddle shake rather than "slightly imprecise aim".
+export const AI_AIM_WANDER_SMOOTHING_FRAMES = 20
+
 // Wall bounces are lossless by design — direction flips, magnitude untouched, matching a classic
 // Pong court's own flat top/bottom walls. Unlike AirHockey's WALL_RESTITUTION (0.72, a real
 // mallet-and-ice feel), any restitution below 1 here would make the ball quietly bleed speed on
@@ -52,3 +59,36 @@ export const SERVE_ANGLE_MAX_DEG = 30
 // something that thin.
 export const PADDLE_TUNNEL_SAFETY_RATIO = 0.4
 export const MAX_TICK_SUBSTEPS = 8
+
+// Brick field sizing — all fractions of board height/width, same idiom as the ratios above. Solo's
+// field fills most of the court (runway near paddle 1, margin before the far wall); the shared
+// vsCpu/twoPlayer field is a narrower block centered on the court so it can never overlap either
+// paddle's reachable area, since a paddle only ever moves in Y at a fixed X.
+export const BRICK_GAP_RATIO = 0.006 // of board.height, applied to both axes
+export const SOLO_BRICK_COLS = 6
+export const SOLO_BRICK_ROWS = 8
+export const SOLO_BRICK_FIELD_X_START_RATIO = 0.3
+export const SOLO_BRICK_FIELD_X_END_RATIO = 0.92
+export const SOLO_BRICK_FIELD_Y_MARGIN_RATIO = 0.06
+export const SHARED_BRICK_COLS = 3
+export const SHARED_BRICK_ROWS = 8
+export const SHARED_BRICK_FIELD_WIDTH_RATIO = 0.24 // total width, centered on board.centerX
+export const SHARED_BRICK_FIELD_Y_MARGIN_RATIO = 0.08
+
+// Solo/Brickbreaker only.
+export const SOLO_LIVES = 3
+
+// A brick or wall bounce (unlike a paddle hit) has no steering and is perfectly elastic — with
+// zero jitter, the ball can settle into a stable periodic orbit inside a partially-cleared pocket
+// (bouncing the same closed path between the remaining brick faces and/or the top/bottom walls
+// forever) and never make further progress — confirmed live: a ball can get trapped bouncing
+// between the court's own top/bottom walls with too few brick hits along the way for brick-only
+// jitter to ever break the cycle. A few degrees of random angle nudge per bounce is enough to
+// de-sync any such cycle within a handful of bounces without reading as anything other than
+// physics to a player — same idea as computeServeVelocity's own SERVE_ANGLE_MAX_DEG randomization.
+// Applied to EVERY reflective surface (bricks, top/bottom walls, solo's far wall) whenever bricks
+// are active for the round — never to classic Pong's own wall bounces, which stay exactly as
+// deterministic/lossless as they've always been (see WALL_RESTITUTION's own doc comment): that
+// simpler geometry can't form a closed loop the way a brick field can, so there's nothing to guard
+// against there, and two competing players don't want their rally's wall bounces made unpredictable.
+export const BOUNCE_JITTER_MAX_DEG = 4

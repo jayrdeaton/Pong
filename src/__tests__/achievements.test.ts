@@ -70,6 +70,21 @@ describe('unlocking', () => {
     expect(ids.has('first_game_played')).toBe(true)
     expect(ids.has('flawless_debut')).toBe(false)
   })
+
+  it('unlocks first_brickbreaker_win only once a brick field has actually been cleared', () => {
+    expect(evaluateUnlockedIds(stats({ solo: { played: 3, cleared: 0 } })).has('first_brickbreaker_win')).toBe(false)
+    expect(evaluateUnlockedIds(stats({ solo: { played: 3, cleared: 1 } })).has('first_brickbreaker_win')).toBe(true)
+  })
+
+  it('unlocks brickbreaker_cleared tiers at their thresholds', () => {
+    expect(evaluateUnlockedIds(stats({ solo: { played: 10, cleared: 9 } })).has('brickbreaker_cleared_silver')).toBe(false)
+    expect(evaluateUnlockedIds(stats({ solo: { played: 10, cleared: 10 } })).has('brickbreaker_cleared_silver')).toBe(true)
+  })
+
+  it('unlocks bricks_destroyed tiers at their thresholds', () => {
+    expect(evaluateUnlockedIds(stats({ bricksDestroyed: 99 })).has('bricks_destroyed_bronze')).toBe(false)
+    expect(evaluateUnlockedIds(stats({ bricksDestroyed: 100 })).has('bricks_destroyed_bronze')).toBe(true)
+  })
 })
 
 describe('unlockedKey', () => {

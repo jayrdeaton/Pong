@@ -1,10 +1,11 @@
 import { useGameLoop } from '@tastic/core'
 import { useCallback, useEffect, useReducer, useRef } from 'react'
 
-import { BALL_SPEED_TIERS, PADDLE_VELOCITY_SMOOTHING_FRAMES, SERVE_PAUSE_MS } from '@/constants/game'
-import { BallSpeedLevel, BallState, BoardLayout, GameState, PaddleState, Player } from '@/types'
-import { centerBall, centerPaddle, clampPaddleY } from '@/utils/board'
-import { applyPaddleCollision, clampPaddleSpeed, computePaddleVelocity, computeServeVelocity, computeTickSubsteps, stepPhysics } from '@/utils/physics'
+import { BALL_SPEED_TIERS, PADDLE_VELOCITY_SMOOTHING_FRAMES, SERVE_PAUSE_MS, SOLO_LIVES } from '@/constants/game'
+import { BallSpeedLevel, BallState, BoardLayout, Brick, GameMode, GameState, PaddleState, Player } from '@/types'
+import { buildSharedBrickField, buildSoloBrickField, centerBall, centerPaddle, clampPaddleY, rescaleBricks } from '@/utils/board'
+import { bricksActiveFor } from '@/utils/gameMode'
+import { applyBrickCollision, applyPaddleCollision, clampPaddleSpeed, computePaddleVelocity, computeServeVelocity, computeTickSubsteps, stepPhysics } from '@/utils/physics'
 
 // setPaddleTarget's public signature simplifies from AirHockey's (player, x, y) to (player, y) —
 // a Pong paddle's X is permanently fixed by board.paddleX[player] for the whole match, so there's
@@ -12,9 +13,12 @@ import { applyPaddleCollision, clampPaddleSpeed, computePaddleVelocity, computeS
 // not {x, y} points.
 type PaddleTargets = Record<Player, number>
 
-type Action = { type: 'TICK'; board: BoardLayout; dt: number; targets: PaddleTargets } | { type: 'START'; random?: () => number } | { type: 'POINT_SERVE'; board: BoardLayout; random?: () => number } | { type: 'RESET'; board: BoardLayout } | { type: 'RESCALE'; prevBoard: BoardLayout; board: BoardLayout }
+// TICK's own random is only ever consulted for brick-bounce jitter (see applyBrickCollision) —
+// optional and Math.random-defaulted the same way START/POINT_SERVE's already are, so tests can
+// inject determinism without the live useGameLoop dispatch needing to pass anything explicit.
+type Action = { type: 'TICK'; board: BoardLayout; dt: number; targets: PaddleTargets; random?: () => number } | { type: 'START'; random?: () => number } | { type: 'POINT_SERVE'; board: BoardLayout; random?: () => number } | { type: 'RESET'; board: BoardLayout } | { type: 'RESCALE'; prevBoard: BoardLayout; board: BoardLayout }
 
-function makeInitialState(board: BoardLayout): GameState {
+function makeInitialState(board: BoardLayout, mode: GameMode, bricksActive: boolean): GameState {
   const ballPos = centerBall(board)
   const p1 = centerPaddle(board, 1)
   const p2 = centerPaddle(board, 2)
@@ -27,7 +31,9 @@ function makeInitialState(board: BoardLayout): GameState {
     ball: { ...ballPos, vx: 0, vy: 0, speed: 0 },
     paddles: { 1: { ...p1, vx: 0, vy: 0 }, 2: { ...p2, vx: 0, vy: 0 } },
     lastScoredBy: null,
-    bounceCount: 0
+    bounceCount: 0,
+    bricks: bricksActive ? (mode === 'solo' ? buildSoloBrickField(board) : buildSharedBrickField(board)) : [],
+    lives: mode === 'solo' ? SOLO_LIVES : 0
   }
 }
 
@@ -75,8 +81,10 @@ function rescalePaddleY(paddle: PaddleState, prevBoard: BoardLayout, board: Boar
   return { x: board.paddleX[player], y: board.y + fy * board.height, vx: 0, vy: 0 }
 }
 
-export function makeReducer(scoreToWin: number, ballSpeedLevel: BallSpeedLevel) {
+export function makeReducer(scoreToWin: number, ballSpeedLevel: BallSpeedLevel, mode: GameMode = 'twoPlayer', bricksEnabled: boolean = false) {
   const tier = BALL_SPEED_TIERS[ballSpeedLevel]
+  const isSolo = mode === 'solo'
+  const bricksActive = bricksActiveFor(mode, bricksEnabled)
 
   return function reducer(state: GameState, action: Action): GameState {
     switch (action.type) {
@@ -85,10 +93,12 @@ export function makeReducer(scoreToWin: number, ballSpeedLevel: BallSpeedLevel) 
       // flip the phase, since the puck legitimately sits at rest until struck), Pong's ball has no
       // such mechanic — this is the very first thing that ever puts it in motion, via
       // computeServeVelocity with towardPlayer: null (a coin-flip direction, since neither player
-      // has conceded anything yet).
+      // has conceded anything yet). Solo has no "neither player" — always serve toward 2 (rightward,
+      // away from paddle 1) so the opening serve heads into the brick field rather than sometimes
+      // serving straight back at the player.
       case 'START': {
         if (state.phase !== 'idle') return state
-        const velocity = computeServeVelocity(tier.base, null, action.random)
+        const velocity = computeServeVelocity(tier.base, isSolo ? 2 : null, action.random)
         return { ...state, phase: 'live', ball: { ...state.ball, vx: velocity.vx, vy: velocity.vy, speed: tier.base } }
       }
 
@@ -97,6 +107,9 @@ export function makeReducer(scoreToWin: number, ballSpeedLevel: BallSpeedLevel) 
 
         const paddles = {
           1: commitPaddle(state.paddles[1], action.targets[1], action.board, 1, action.dt),
+          // Committed unconditionally even in solo — harmless (paddle 2 is never collided against
+          // or rendered there), and simpler than special-casing it out of a shape every other
+          // action already assumes exists.
           2: commitPaddle(state.paddles[2], action.targets[2], action.board, 2, action.dt)
         }
 
@@ -107,13 +120,28 @@ export function makeReducer(scoreToWin: number, ballSpeedLevel: BallSpeedLevel) 
         const subDt = action.dt / substeps
 
         let ball: BallState = state.ball
+        let bricks: Brick[] = state.bricks
         let anyBounced = false
         let scoredBy: 1 | 2 | null = null
 
         for (let i = 0; i < substeps; i++) {
           ball = applyPaddleCollision(ball, paddles[1], action.board, tier.increment, tier.max)
-          ball = applyPaddleCollision(ball, paddles[2], action.board, tier.increment, tier.max)
-          const result = stepPhysics(ball, action.board, subDt)
+          // Solo has no second paddle to collide against — the far edge is a wall instead (see
+          // farEdgeIsWall below).
+          if (!isSolo) ball = applyPaddleCollision(ball, paddles[2], action.board, tier.increment, tier.max)
+
+          if (bricksActive) {
+            const hit = applyBrickCollision(ball, bricks, action.board, action.random)
+            ball = hit.ball
+            if (hit.hitIndex !== null) {
+              bricks = bricks.map((b, idx) => (idx === hit.hitIndex ? { ...b, destroyed: true } : b))
+              anyBounced = true
+            }
+          }
+
+          // Wall-bounce jitter only when bricksActive — see stepPhysics' own doc: classic Pong's
+          // wall bounces stay exactly as deterministic as they've always been otherwise.
+          const result = stepPhysics(ball, action.board, subDt, isSolo, bricksActive ? action.random : undefined)
           anyBounced = anyBounced || result.bounced
           ball = { x: result.x, y: result.y, vx: result.vx, vy: result.vy, speed: result.speed }
           // A score is final — stop sub-stepping immediately rather than continuing to integrate a
@@ -125,21 +153,39 @@ export function makeReducer(scoreToWin: number, ballSpeedLevel: BallSpeedLevel) 
           }
         }
 
+        // Checked before scoredBy: if the last brick is destroyed in an early substep and the ball
+        // also gets past paddle 1 in a later substep of the SAME tick, the win takes priority over
+        // the miss that happened to follow it.
+        if (isSolo && bricksActive && bricks.every((b) => b.destroyed)) {
+          return { ...state, phase: 'gameOver', ball, paddles, bricks, bounceCount: anyBounced ? state.bounceCount + 1 : state.bounceCount }
+        }
+
         if (scoredBy !== null) {
-          const scores: [number, number] = [state.scores[0], state.scores[1]]
-          scores[scoredBy - 1]++
           // At rest, dead center — the actual re-launch happens on the FOLLOWING POINT_SERVE, once
           // SERVE_PAUSE_MS has given both players a beat to see the score change (see
           // useGameState's own effect below). speed: 0 here, not tier.base — a scored ball isn't
           // "in play" again until POINT_SERVE actually serves it.
           const nextBall: BallState = { ...centerBall(action.board), vx: 0, vy: 0, speed: 0 }
-          if (scores[scoredBy - 1] >= scoreToWin) {
-            return { ...state, phase: 'gameOver', scores, ball: nextBall, paddles, lastScoredBy: scoredBy }
+
+          if (isSolo) {
+            // scoredBy is always 2 in solo (farEdgeIsWall means P2's edge never scores) — i.e. a
+            // miss, not an opponent's point. lastScoredBy stays 1 regardless so POINT_SERVE's
+            // otherPlayer(lastScoredBy) still resolves to 2, correctly serving away from the player
+            // and into the field, with no mode-branching needed inside POINT_SERVE itself.
+            const lives = state.lives - 1
+            if (lives <= 0) return { ...state, phase: 'gameOver', ball: nextBall, paddles, bricks, lives, lastScoredBy: 1 }
+            return { ...state, phase: 'pointScored', ball: nextBall, paddles, bricks, lives, lastScoredBy: 1 }
           }
-          return { ...state, phase: 'pointScored', scores, ball: nextBall, paddles, lastScoredBy: scoredBy }
+
+          const scores: [number, number] = [state.scores[0], state.scores[1]]
+          scores[scoredBy - 1]++
+          if (scores[scoredBy - 1] >= scoreToWin) {
+            return { ...state, phase: 'gameOver', scores, ball: nextBall, paddles, bricks, lastScoredBy: scoredBy }
+          }
+          return { ...state, phase: 'pointScored', scores, ball: nextBall, paddles, bricks, lastScoredBy: scoredBy }
         }
 
-        return { ...state, ball, paddles, bounceCount: anyBounced ? state.bounceCount + 1 : state.bounceCount }
+        return { ...state, ball, paddles, bricks, bounceCount: anyBounced ? state.bounceCount + 1 : state.bounceCount }
       }
 
       // Post-point re-serve — see useGameState's own SERVE_PAUSE_MS timer. Re-centers both
@@ -161,13 +207,14 @@ export function makeReducer(scoreToWin: number, ballSpeedLevel: BallSpeedLevel) 
       }
 
       case 'RESET':
-        return makeInitialState(action.board)
+        return makeInitialState(action.board, mode, bricksActive)
 
       case 'RESCALE':
         return {
           ...state,
           ball: rescaleBall(state.ball, action.prevBoard, action.board),
-          paddles: { 1: rescalePaddleY(state.paddles[1], action.prevBoard, action.board, 1), 2: rescalePaddleY(state.paddles[2], action.prevBoard, action.board, 2) }
+          paddles: { 1: rescalePaddleY(state.paddles[1], action.prevBoard, action.board, 1), 2: rescalePaddleY(state.paddles[2], action.prevBoard, action.board, 2) },
+          bricks: rescaleBricks(state.bricks, action.prevBoard, action.board)
         }
 
       default:
@@ -176,19 +223,22 @@ export function makeReducer(scoreToWin: number, ballSpeedLevel: BallSpeedLevel) 
   }
 }
 
-export function useGameState(board: BoardLayout, scoreToWin: number, ballSpeedLevel: BallSpeedLevel, paused: boolean) {
+export function useGameState(board: BoardLayout, scoreToWin: number, ballSpeedLevel: BallSpeedLevel, mode: GameMode, bricksEnabled: boolean, paused: boolean) {
   // Mirrored every render so the stable useReducer wrapper below always dispatches through the
   // latest settings-derived reducer, without needing to recreate useReducer itself (which would
   // reset `state` back to its initializer whenever scoreToWin/ballSpeedLevel changed).
-  const reducerRef = useRef(makeReducer(scoreToWin, ballSpeedLevel))
+  const reducerRef = useRef(makeReducer(scoreToWin, ballSpeedLevel, mode, bricksEnabled))
   // eslint-disable-next-line react-hooks/refs -- see comment above
-  reducerRef.current = makeReducer(scoreToWin, ballSpeedLevel)
+  reducerRef.current = makeReducer(scoreToWin, ballSpeedLevel, mode, bricksEnabled)
 
+  const bricksActive = bricksActiveFor(mode, bricksEnabled)
   const [state, dispatch] = useReducer(
     // eslint-disable-next-line react-hooks/refs -- see reducerRef's own comment above; this wrapper is only ever invoked from dispatch (an event handler), never during render
     (s: GameState, a: Action) => reducerRef.current(s, a),
     board,
-    makeInitialState
+    // Wrapped rather than passed bare: React's lazy-init calls this with exactly one argument
+    // (the board), but makeInitialState now also needs mode/bricksActive.
+    (b) => makeInitialState(b, mode, bricksActive)
   )
 
   const boardRef = useRef(board)

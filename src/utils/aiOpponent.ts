@@ -4,6 +4,12 @@ import { clampPaddleY } from '@/utils/board'
 
 export type AIDifficulty = 'easy' | 'medium' | 'hard'
 
+// Loadout-screen-only: picking 'none' resolves the round to GameMode 'solo' instead of 'vsCpu'
+// (see app/loadout.tsx) rather than ever being persisted as a real AIDifficulty — GameSettings.
+// aiDifficulty itself stays plain AIDifficulty since it's consumed elsewhere as a real difficulty
+// (useAIOpponent, VsCpuStats.byDifficulty, beatCpuFamily()).
+export type AIDifficultyChoice = AIDifficulty | 'none'
+
 export interface AITuning {
   // How far ahead (ms) the AI predicts the ball's straight-line Y position — no wall-bounce-aware
   // lookahead in v1 (see the design spec), same "watch and adjust" philosophy AirHockey's own AI

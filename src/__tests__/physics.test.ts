@@ -1,6 +1,6 @@
 import { MAX_PADDLE_SPEED, MAX_TICK_SUBSTEPS, PADDLE_COLLISION_RESTITUTION, SERVE_ANGLE_MAX_DEG } from '@/constants/game'
 import { BoardLayout } from '@/types'
-import { applyPaddleCollision, clampPaddleSpeed, computePaddleVelocity, computeServeVelocity, computeTickSubsteps, stepPhysics } from '@/utils/physics'
+import { applyBrickCollision, applyPaddleCollision, clampPaddleSpeed, computePaddleVelocity, computeServeVelocity, computeTickSubsteps, stepPhysics } from '@/utils/physics'
 
 // A standard test board — isolates wall/edge-scoring behavior from paddle-collision behavior, same
 // discipline AirHockey's own physics.test.ts fixture uses. Landscape-shaped (width > height, unlike
@@ -94,6 +94,54 @@ describe('stepPhysics — edge scoring', () => {
   })
 })
 
+describe('stepPhysics — bounce jitter', () => {
+  it('jitters a wall bounce only when random is provided — classic Pong stays perfectly deterministic by default', () => {
+    const ball = { x: cx, y: board.y + r + 1, vx: 3, vy: -7, speed: Math.hypot(3, 7) }
+    const withoutJitter = stepPhysics(ball, board)
+    const withJitter = stepPhysics(ball, board, 1, false, () => 0.9)
+    expect(withoutJitter.vx).toBeCloseTo(3, 5) // no random passed -> vx untouched, exactly as every existing caller already expects
+    expect(withJitter.vx).not.toBeCloseTo(3, 5) // random passed -> the wall bounce got jittered too
+    expect(Math.hypot(withJitter.vx, withJitter.vy)).toBeCloseTo(Math.hypot(3, 7), 5) // magnitude still preserved — a direction-only nudge
+  })
+
+  it('different random draws produce different jittered angles off the same wall bounce', () => {
+    const ball = { x: cx, y: board.y + r + 1, vx: 3, vy: -7, speed: Math.hypot(3, 7) }
+    const a = stepPhysics(ball, board, 1, false, () => 0.9)
+    const b = stepPhysics(ball, board, 1, false, () => 0.1)
+    expect(a.vx).not.toBeCloseTo(b.vx, 5)
+  })
+
+  it('never jitters when the ball did not bounce at all this step', () => {
+    const ball = { x: cx, y: cy, vx: 2, vy: 2, speed: Math.hypot(2, 2) }
+    const result = stepPhysics(ball, board, 1, false, () => 0.9)
+    expect(result.vx).toBeCloseTo(2, 5)
+    expect(result.vy).toBeCloseTo(2, 5)
+  })
+})
+
+describe('stepPhysics — solo far wall (farEdgeIsWall)', () => {
+  it('bounces off the far edge instead of scoring when true — solo has no second paddle to concede a point to', () => {
+    const ball = { x: board.x + board.width - r + 5, y: cy, vx: 50, vy: 0, speed: 50 }
+    const result = stepPhysics(ball, board, 1, true)
+    expect(result.scored).toBeNull()
+    expect(result.bounced).toBe(true)
+    expect(result.vx).toBeLessThan(0) // reflected back leftward, into the court
+    expect(result.x).toBeLessThanOrEqual(board.x + board.width - r)
+  })
+
+  it('still scores P2 off the near (P1) edge when true — only the far edge changes', () => {
+    const ball = { x: board.x + r - 5, y: cy, vx: -50, vy: 0, speed: 50 }
+    const result = stepPhysics(ball, board, 1, true)
+    expect(result.scored).toBe(2)
+  })
+
+  it('defaults to false — every existing caller/test keeps scoring at the far edge unchanged', () => {
+    const ball = { x: board.x + board.width - r + 5, y: cy, vx: 50, vy: 0, speed: 50 }
+    const result = stepPhysics(ball, board)
+    expect(result.scored).toBe(1)
+  })
+})
+
 describe('applyPaddleCollision', () => {
   const halfW = board.paddleWidth / 2
   const halfH = board.paddleHeight / 2
@@ -182,6 +230,61 @@ describe('applyPaddleCollision', () => {
     expect(result.vx).toBeGreaterThan(0)
     expect(result.speed).toBeCloseTo(5 + speedIncrement, 5)
     expect(Math.hypot(result.vx, result.vy)).toBeCloseTo(5 + speedIncrement, 5)
+  })
+})
+
+describe('applyBrickCollision', () => {
+  it('is a no-op when the ball overlaps no brick', () => {
+    const brick = { x: 0, y: 0, width: 10, height: 10, destroyed: false }
+    const ball = { x: 500, y: 500, vx: 3, vy: 3, speed: Math.hypot(3, 3) }
+    const result = applyBrickCollision(ball, [brick], board)
+    expect(result.ball).toEqual(ball)
+    expect(result.hitIndex).toBeNull()
+  })
+
+  it("reflects off the brick's face, reports the hit index, and is lossless — no ratchet, unlike a paddle hit", () => {
+    const brick = { x: cx, y: cy - 5, width: 10, height: 10, destroyed: false }
+    const ball = { x: cx - 6, y: cy, vx: 5, vy: 0, speed: 5 } // overlapping the brick's left face
+    // random: () => 0.5 -> exactly zero jitter (see the jitter tests below), so the reflection is
+    // pure geometry here, matching this test's own precise assertions.
+    const result = applyBrickCollision(ball, [brick], board, () => 0.5)
+    expect(result.hitIndex).toBe(0)
+    expect(result.ball.vx).toBeLessThan(0) // bounced back away from the brick
+    expect(result.ball.speed).toBeCloseTo(5, 5)
+    expect(Math.hypot(result.ball.vx, result.ball.vy)).toBeCloseTo(5, 5)
+  })
+
+  it('skips a destroyed brick entirely, even when geometrically overlapping', () => {
+    const brick = { x: cx, y: cy - 5, width: 10, height: 10, destroyed: true }
+    const ball = { x: cx - 6, y: cy, vx: 5, vy: 0, speed: 5 }
+    const result = applyBrickCollision(ball, [brick], board)
+    expect(result.ball).toEqual(ball)
+    expect(result.hitIndex).toBeNull()
+  })
+
+  it('resolves only the first overlapping brick in the array, not every one in a single call', () => {
+    const overlapping = { x: cx, y: cy - 5, width: 10, height: 10, destroyed: false }
+    const ball = { x: cx - 6, y: cy, vx: 5, vy: 0, speed: 5 }
+    const result = applyBrickCollision(ball, [overlapping, overlapping], board, () => 0.5)
+    expect(result.hitIndex).toBe(0)
+  })
+
+  it('applies a small random angle jitter per hit — the anti-stall device: a perfectly elastic, unsteered bounce could otherwise settle into a stable periodic orbit inside a partially-cleared pocket and never make further progress', () => {
+    const brick = { x: cx, y: cy - 5, width: 10, height: 10, destroyed: false }
+    const ball = { x: cx - 6, y: cy, vx: 5, vy: 0, speed: 5 }
+    const a = applyBrickCollision(ball, [brick], board, () => 0.9)
+    const b = applyBrickCollision(ball, [brick], board, () => 0.1)
+    expect(a.ball.vy).not.toBeCloseTo(b.ball.vy, 5) // different draws -> measurably different angles
+    // Jitter rotates the vector — it never changes its magnitude, so speed stays exact either way.
+    expect(Math.hypot(a.ball.vx, a.ball.vy)).toBeCloseTo(5, 5)
+    expect(Math.hypot(b.ball.vx, b.ball.vy)).toBeCloseTo(5, 5)
+  })
+
+  it('random defaults to Math.random when omitted, so live gameplay is naturally randomized without a caller having to opt in', () => {
+    const brick = { x: cx, y: cy - 5, width: 10, height: 10, destroyed: false }
+    const ball = { x: cx - 6, y: cy, vx: 5, vy: 0, speed: 5 }
+    const result = applyBrickCollision(ball, [brick], board)
+    expect(Math.hypot(result.ball.vx, result.ball.vy)).toBeCloseTo(5, 5)
   })
 })
 

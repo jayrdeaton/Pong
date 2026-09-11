@@ -2,6 +2,7 @@ import { Toaster, ToastProvider } from '@rific/toaster'
 import { AccelerometerOrientationProvider } from '@tastic/split-screen'
 import * as Haptics from 'expo-haptics'
 import { Stack } from 'expo-router'
+import { DeviceMotion } from 'expo-sensors'
 import { ReactNode } from 'react'
 import { StyleSheet } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -62,7 +63,9 @@ export default function RootLayout() {
                   <ProfilesProvider>
                     <ProfilesGate>
                       <GameStatsProvider>
-                        <AccelerometerOrientationProvider>
+                        {/* deviceMotion is the app's own real expo-sensors import, injected rather than
+                        imported by @tastic/core itself — see that package's own doc for why. */}
+                        <AccelerometerOrientationProvider deviceMotion={DeviceMotion}>
                           <ToastProvider haptics={Haptics} paper={RNPaper}>
                             <Stack screenOptions={{ headerShown: false, gestureEnabled: false }} />
                             <Toaster />

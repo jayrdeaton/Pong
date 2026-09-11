@@ -3,7 +3,7 @@ import { createContext, ReactNode, useCallback, useContext, useMemo } from 'reac
 
 import { ACHIEVEMENT_CATALOG } from '@/constants/achievements'
 import { AchievementDefinition, Player, StatsState, UnlockedAchievementsState } from '@/types'
-import { applyMatchOutcome, getProfileStatsView, MatchContext, MatchOutcome } from '@/utils/statsEngine'
+import { applyMatchOutcome, applySoloOutcome, getProfileStatsView, MatchContext, MatchOutcome } from '@/utils/statsEngine'
 import { DEFAULT_STATS, isValidStats } from '@/utils/statsValidation'
 
 // Produces 'pong.stats' and 'pong.achievements'.
@@ -21,6 +21,12 @@ interface GameStatsContextValue {
   stats: StatsState
   unlockedAchievements: UnlockedAchievementsState
   recordMatchOutcome: (outcome: MatchOutcome, context: MatchContext) => RecordMatchResult
+  // Solo has no opponent/score-tuple shape to fit into MatchOutcome (see applySoloOutcome) — a
+  // genuinely separate recorder, not a solo-shaped recordMatchOutcome call. profileId is singular
+  // (not a per-seat map) since solo only ever has the one human seat; reuses RecordMatchResult's
+  // shape (profiles keyed by seat) so game.tsx's existing achievement-toast walk works unchanged —
+  // solo only ever populates seat 1.
+  recordSoloOutcome: (result: { cleared: boolean; bricksDestroyed: number }, profileId?: string) => RecordMatchResult
   // Wipes both stored keys back to defaults — irreversible, so callers confirm with the player
   // first (see achievements.tsx's reset confirmation).
   resetAll: () => void
@@ -78,6 +84,21 @@ export function GameStatsProvider({ children }: Props) {
     [recordOutcome]
   )
 
+  const recordSoloOutcome = useCallback(
+    (result: { cleared: boolean; bricksDestroyed: number }, profileId?: string): RecordMatchResult => {
+      const outcome = recordOutcome((prev) => applySoloOutcome(prev, result, profileId))
+
+      const profiles: Partial<Record<Player, AchievementDefinition[]>> = {}
+      if (profileId) {
+        const unlocked = outcome.profiles[profileId]
+        if (unlocked && unlocked.length > 0) profiles[1] = unlocked
+      }
+
+      return { device: outcome.device, profiles }
+    },
+    [recordOutcome]
+  )
+
   const removeProfileStats = useCallback(
     (profileId: string) => {
       removeProfile(profileId, (prev) => {
@@ -89,7 +110,7 @@ export function GameStatsProvider({ children }: Props) {
     [removeProfile]
   )
 
-  const value = useMemo(() => ({ stats, unlockedAchievements, recordMatchOutcome, resetAll, removeProfileStats, loaded }), [stats, unlockedAchievements, recordMatchOutcome, resetAll, removeProfileStats, loaded])
+  const value = useMemo(() => ({ stats, unlockedAchievements, recordMatchOutcome, recordSoloOutcome, resetAll, removeProfileStats, loaded }), [stats, unlockedAchievements, recordMatchOutcome, recordSoloOutcome, resetAll, removeProfileStats, loaded])
 
   return <GameStatsContext.Provider value={value}>{children}</GameStatsContext.Provider>
 }

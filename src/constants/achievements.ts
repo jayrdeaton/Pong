@@ -49,5 +49,15 @@ export const ACHIEVEMENT_CATALOG: AchievementDefinition[] = [
   ...tieredFamily<StatsState>({ id: 'cpu_streak', titles: { bronze: 'On a Roll', silver: 'Hot Streak', gold: 'Unstoppable' }, description: (n) => `Win ${n} matches in a row against the CPU.`, icon: 'fire', thresholds: { bronze: 3, silver: 5, gold: 10 }, value: (stats) => stats.vsCpu.bestWinStreak }),
   ...beatCpuFamily(),
   ...tieredFamily<StatsState>({ id: 'local_matches', titles: { bronze: 'Pass the Phone', silver: 'Couch Champion', gold: 'Living Room Legend' }, description: (n) => `Play ${n} local two-player matches.`, icon: 'account-multiple', thresholds: { bronze: 10, silver: 50, gold: 150 }, value: (stats) => stats.twoPlayer.played }),
+  {
+    id: 'first_brickbreaker_win',
+    title: 'Brickbreaker',
+    description: 'Clear every brick in Brickbreaker.',
+    tier: 'bronze',
+    icon: 'view-grid',
+    isUnlocked: (stats) => stats.solo.cleared >= 1
+  },
+  ...tieredFamily<StatsState>({ id: 'brickbreaker_cleared', titles: { bronze: 'Demolition', silver: 'Wrecking Crew', gold: 'Nothing Left Standing' }, description: (n) => `Clear the brick field ${n} times in Brickbreaker.`, icon: 'view-grid-outline', thresholds: { bronze: 1, silver: 10, gold: 50 }, value: (stats) => stats.solo.cleared }),
+  ...tieredFamily<StatsState>({ id: 'bricks_destroyed', titles: { bronze: 'Breaking Ground', silver: 'Demolition Crew', gold: 'Wrecking Ball' }, description: (n) => `Destroy ${n} total bricks.`, icon: 'wall', thresholds: { bronze: 100, silver: 500, gold: 2000 }, value: (stats) => stats.bricksDestroyed }),
   ...tieredFamily<StatsState>({ id: 'days_played', titles: { bronze: 'Regular Visitor', silver: 'Dedicated', gold: 'Devoted' }, description: (n) => `Play ${n} days in a row.`, icon: 'calendar-check', thresholds: { bronze: 3, silver: 14, gold: 30 }, value: (stats) => stats.bestDayStreak })
 ]

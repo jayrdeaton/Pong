@@ -36,7 +36,10 @@
       }
     },
     "android": {
-      "package": "com.infinitetoken.pong"
+      "package": "com.infinitetoken.pong",
+      "permissions": [
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -71,8 +74,14 @@
       "@tastic/edge-guard"
     ],
     "extra": {
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "13a5a7e9-cb14-473c-b74c-a0d1ffcacff6"
+      }
     },
-    "owner": "jayrdeaton"
+    "owner": "jayrdeaton",
+    "updates": {
+      "url": "https://u.expo.dev/13a5a7e9-cb14-473c-b74c-a0d1ffcacff6"
+    }
   }
 }

@@ -1,11 +1,11 @@
 import { useAutoPaperTheme } from '@rific/auto-paper'
 import { Canvas, DashPathEffect, Line, Rect, RoundedRect, vec } from '@shopify/react-native-skia'
-import { Disc } from '@tastic/sprites/shapes'
+import { Disc, ObstacleRect } from '@tastic/sprites/shapes'
 import { useEffect } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { cancelAnimation, Easing, useDerivedValue, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated'
 
-import { BallState, BoardLayout, GamePhase, PaddleStates } from '@/types'
+import { BallState, BoardLayout, Brick, GamePhase, PaddleStates } from '@/types'
 
 export interface BoardProps {
   board: BoardLayout
@@ -16,9 +16,14 @@ export interface BoardProps {
   // they'd sit redundantly right against the device's own physical edge, which already reads as the
   // boundary; only desktop web, with no such edge, gets them drawn.
   showWalls: boolean
+  bricks: Brick[]
+  // Solo/Brickbreaker: no second paddle (see below), and the far edge renders as a solid wall —
+  // unconditionally, unlike showWalls above, since without it the new bounce-instead-of-score
+  // behavior at that edge would be inexplicable to the player.
+  soloMode: boolean
 }
 
-export default function Board({ board, ball, paddles, phase, showWalls }: BoardProps) {
+export default function Board({ board, ball, paddles, phase, showWalls, bricks, soloMode }: BoardProps) {
   const { x, y, width, height, wallThickness, ballRadius, paddleWidth, paddleHeight } = board
   const { colors: themeColors, dark } = useAutoPaperTheme()
 
@@ -70,11 +75,29 @@ export default function Board({ board, ball, paddles, phase, showWalls }: BoardP
           </>
         )}
 
+        {/* Solo/Brickbreaker's far wall — unconditional (not gated by showWalls above), since it
+            replaces P2's own edge/paddle rather than being a cosmetic desktop-web extra: without it
+            the far edge would look identical to a normal scoring edge and the new bounce behavior
+            there would make no visual sense. Same shape AirHockey uses for its own side walls. */}
+        {soloMode && <ObstacleRect x={x + width} y={y - wallThickness} width={wallThickness} height={height + wallThickness * 2} color={wallColor} />}
+
+        {/* Bricks — destructible, filtered before mapping so a destroyed one simply stops
+            rendering. Same fleet idiom AirHockey/BoxHockey use for their own (permanent) Obstacle
+            arrays, reusing the neutral wallColor rather than a separate palette. Keyed by position
+            (fixed for a brick's whole lifetime), not array index — filtering destroyed ones out
+            shifts later bricks' indices, which would otherwise make React reuse a Skia node across
+            two different bricks and read as one brick jumping to another's spot. */}
+        {bricks
+          .filter((b) => !b.destroyed)
+          .map((b) => (
+            <ObstacleRect key={`${b.x}-${b.y}`} x={b.x} y={b.y} width={b.width} height={b.height} color={wallColor} />
+          ))}
+
         {/* Paddles — bars, not discs (see BoardLayout's own paddleWidth/paddleHeight doc comment in
             types/index.ts): each only ever moves on Y, drawn centered on paddles[player].y at its
-            fixed board.paddleX[player]. */}
+            fixed board.paddleX[player]. P2 doesn't exist in solo — see soloMode above. */}
         <RoundedRect x={paddles[1].x - paddleWidth / 2} y={paddles[1].y - paddleHeight / 2} width={paddleWidth} height={paddleHeight} r={paddleCornerRadius} color={p1Color} />
-        <RoundedRect x={paddles[2].x - paddleWidth / 2} y={paddles[2].y - paddleHeight / 2} width={paddleWidth} height={paddleHeight} r={paddleCornerRadius} color={p2Color} />
+        {!soloMode && <RoundedRect x={paddles[2].x - paddleWidth / 2} y={paddles[2].y - paddleHeight / 2} width={paddleWidth} height={paddleHeight} r={paddleCornerRadius} color={p2Color} />}
 
         {/* Ball — softly pulsing while waiting to go live. Ring-less Disc (no ringColor): a plain
             filled circle, matching this game's pre-@tastic/sprites rendering exactly — see Disc's

@@ -1,11 +1,21 @@
 import { circleVsRect, reflectOffNormal } from '@tastic/physics'
 
-import { MAX_PADDLE_SPEED, MAX_TICK_SUBSTEPS, PADDLE_COLLISION_RESTITUTION, PADDLE_STEER_FACTOR, PADDLE_TUNNEL_SAFETY_RATIO, SERVE_ANGLE_MAX_DEG, WALL_RESTITUTION } from '@/constants/game'
-import { BallState, BoardLayout, PaddleState, Player } from '@/types'
+import { BOUNCE_JITTER_MAX_DEG, MAX_PADDLE_SPEED, MAX_TICK_SUBSTEPS, PADDLE_COLLISION_RESTITUTION, PADDLE_STEER_FACTOR, PADDLE_TUNNEL_SAFETY_RATIO, SERVE_ANGLE_MAX_DEG, WALL_RESTITUTION } from '@/constants/game'
+import { BallState, BoardLayout, Brick, PaddleState, Player } from '@/types'
 
 export interface PhysicsResult extends BallState {
   scored: 1 | 2 | null
   bounced: boolean
+}
+
+// Rotates a velocity vector by a small random angle, preserving its magnitude exactly — see
+// BOUNCE_JITTER_MAX_DEG's own doc comment for why this exists. Shared by stepPhysics' wall bounces
+// and applyBrickCollision below, the two reflective surfaces that need it.
+function applyBounceJitter(vx: number, vy: number, random: () => number): { vx: number; vy: number } {
+  const jitterRad = ((random() * 2 - 1) * BOUNCE_JITTER_MAX_DEG * Math.PI) / 180
+  const cos = Math.cos(jitterRad)
+  const sin = Math.sin(jitterRad)
+  return { vx: vx * cos - vy * sin, vy: vx * sin + vy * cos }
 }
 
 // Flat top/bottom walls, full width, always solid — no goal-mouth gap in them anywhere, unlike
@@ -17,10 +27,17 @@ export interface PhysicsResult extends BallState {
 // for Pong — not skipping clean over the thin paddle bar — lives in useGameState.ts's TICK handler
 // instead (see computeTickSubsteps below), since each substep also needs fresh paddle-collision
 // detection against both paddles, not just wall integration.
-export function stepPhysics(ball: BallState, board: BoardLayout, dt = 1): PhysicsResult {
+//
+// farEdgeIsWall (solo/Brickbreaker only, default false so every existing caller is byte-identical):
+// P2's edge bounces instead of scoring, since solo has no second paddle to concede a point to.
+// random (also default-omitted): when provided, a wall/far-wall bounce gets the same anti-stall
+// jitter applyBrickCollision applies to a brick hit — see BOUNCE_JITTER_MAX_DEG's own doc. The
+// caller (useGameState.ts's TICK case) only ever passes it when bricksActive; classic Pong's own
+// wall bounces stay exactly as deterministic as they've always been.
+export function stepPhysics(ball: BallState, board: BoardLayout, dt = 1, farEdgeIsWall = false, random?: () => number): PhysicsResult {
   const r = board.ballRadius
-  const { vx, speed } = ball
-  let { x, y, vy } = ball
+  const { speed } = ball
+  let { x, y, vx, vy } = ball
   x += vx * dt
   y += vy * dt
 
@@ -40,8 +57,22 @@ export function stepPhysics(ball: BallState, board: BoardLayout, dt = 1): Physic
     bounced = true
   }
 
-  if (x + r < board.x) return { x, y, vx, vy, speed, scored: 2, bounced } // cleared P1's edge — P2 scores
-  if (x - r > board.x + board.width) return { x, y, vx, vy, speed, scored: 1, bounced } // cleared P2's edge — P1 scores
+  if (farEdgeIsWall && x + r > board.x + board.width) {
+    x = board.x + board.width - r
+    // Solid sits to the right of this edge, so outward into free space points LEFT, (-1, 0).
+    vx = reflectOffNormal({ x: vx, y: vy }, { x: -1, y: 0 }, WALL_RESTITUTION).x
+    bounced = true
+  }
+
+  if (bounced && random) {
+    const jittered = applyBounceJitter(vx, vy, random)
+    vx = jittered.vx
+    vy = jittered.vy
+  }
+
+  if (x + r < board.x) return { x, y, vx, vy, speed, scored: 2, bounced } // cleared P1's edge — P2 scores (or a solo miss)
+  // Unreachable once farEdgeIsWall is true — the block above already bounces the ball back in bounds first.
+  if (!farEdgeIsWall && x - r > board.x + board.width) return { x, y, vx, vy, speed, scored: 1, bounced } // cleared P2's edge — P1 scores
 
   return { x, y, vx, vy, speed, scored: null, bounced }
 }
@@ -90,6 +121,36 @@ export function applyPaddleCollision(ball: BallState, paddle: PaddleState, board
   const nextSpeed = Math.min(maxSpeed, ball.speed + speedIncrement)
   const dir = Math.hypot(vx, vy) || 1
   return { x, y, vx: (vx / dir) * nextSpeed, vy: (vy / dir) * nextSpeed, speed: nextSpeed }
+}
+
+// Ball-vs-brick, same circleVsRect + reflectOffNormal idiom AirHockey/BoxHockey use for their own
+// static Obstacle arrays — the one difference is bricks are destructible, so this is a plain loop
+// (no spatial partitioning, matching the fleet convention) that stops at the FIRST live hit rather
+// than resolving every overlapping brick in one call, same discipline applyPaddleCollision uses
+// against a single paddle. Deliberately no speed ratchet here (unlike a paddle hit) — a dense brick
+// field with a per-hit ratchet would rocket the ball to max speed almost immediately.
+//
+// random defaults to Math.random so live gameplay is naturally randomized; callers that need
+// determinism (tests, or a caller wanting a specific angle) can inject their own. () => 0.5
+// produces exactly zero jitter — see BOUNCE_JITTER_MAX_DEG's own doc for why a non-zero default
+// here isn't optional: a perfectly elastic, unsteered bounce can settle into a stable periodic
+// orbit inside a partially-cleared pocket and never make further progress.
+export function applyBrickCollision(ball: BallState, bricks: Brick[], board: BoardLayout, random: () => number = Math.random): { ball: BallState; hitIndex: number | null } {
+  for (let i = 0; i < bricks.length; i++) {
+    const brick = bricks[i]
+    if (brick.destroyed) continue
+    const col = circleVsRect({ position: { x: ball.x, y: ball.y }, radius: board.ballRadius }, brick)
+    if (!col.hit) continue
+
+    const x = ball.x + col.normal.x * col.depth
+    const y = ball.y + col.normal.y * col.depth
+    const reflected = reflectOffNormal({ x: ball.vx, y: ball.vy }, col.normal, WALL_RESTITUTION)
+    // A rotation preserves magnitude exactly, so ball.speed (the ratchet's own source of truth)
+    // stays accurate with no recomputation — this jitter is a direction-only nudge.
+    const { vx, vy } = applyBounceJitter(reflected.x, reflected.y, random)
+    return { ball: { x, y, vx, vy, speed: ball.speed }, hitIndex: i }
+  }
+  return { ball, hitIndex: null }
 }
 
 // Serve direction/angle for START and POINT_SERVE. towardPlayer null means "first serve of the

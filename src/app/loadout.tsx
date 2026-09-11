@@ -14,8 +14,8 @@ import { SettingsDialog } from '@/components/SettingsDialog'
 import { CPU_COLOR_STORAGE_KEY, DEFAULT_P1_COLOR, DEFAULT_P2_COLOR, isValidHex, PLAYER_COLORS_STORAGE_KEY } from '@/components/Theme'
 import { useGameSettings } from '@/hooks/useGameSettings'
 import { useProfiles } from '@/hooks/useProfiles'
-import { BallSpeedLevel, ControlScheme, PaddleSizeLevel, Player } from '@/types'
-import { AIDifficulty } from '@/utils/aiOpponent'
+import { BallSpeedLevel, ControlScheme, GameMode, PaddleSizeLevel, Player } from '@/types'
+import { AIDifficultyChoice } from '@/utils/aiOpponent'
 import { humanPlayersFor, parseGameMode } from '@/utils/gameMode'
 import { safeBack } from '@/utils/navigation'
 
@@ -44,13 +44,18 @@ const BALL_SPEED_OPTIONS: MenuOption<BallSpeedLevel>[] = [
 const SCORE_TO_WIN_OPTIONS: MenuOption<number>[] = [3, 5, 7, 10].map((value) => ({ value, label: String(value) }))
 
 // aiOpponent.ts has no AI_DIFFICULTY_LABELS export of its own — same as AirHockey's version, it
-// only exports the AIDifficulty type and the pure tuning function — so the labels live here
-// instead, same three tiers.
-const AI_DIFFICULTY_OPTIONS: MenuOption<AIDifficulty>[] = [
+// only exports the AIDifficulty/AIDifficultyChoice types and the pure tuning function — so the
+// labels live here instead.
+// 'none' resolves the round to solo/Brickbreaker instead of vsCpu (see handleDifficultyChange/
+// finalMode below) — mirrors Snake's own identical addition to its CPU-difficulty picker.
+const AI_DIFFICULTY_OPTIONS: MenuOption<AIDifficultyChoice>[] = [
   { value: 'easy', label: 'Easy', icon: 'emoticon-happy-outline' },
   { value: 'medium', label: 'Medium', icon: 'emoticon-neutral-outline' },
-  { value: 'hard', label: 'Hard', icon: 'emoticon-devil-outline' }
+  { value: 'hard', label: 'Hard', icon: 'emoticon-devil-outline' },
+  { value: 'none', label: 'None', icon: 'close-circle-outline' }
 ]
+
+const BRICKS_OPTION: MenuOption<'bricks'> = { value: 'bricks', label: 'Bricks', icon: 'view-grid' }
 
 // Left icon-less, mirroring Snake's own CONTROL_SCHEME_OPTIONS exactly — there's no
 // MaterialCommunityIcons glyph that reads as "WASD" or "IJKL" at a glance the other option lists
@@ -77,6 +82,24 @@ export default function LoadoutScreen() {
   const p2IsHuman = humanPlayers.includes(2)
 
   const { settings, setSettings, commitRoundSettings } = useGameSettings()
+  // Local, non-persisted — seeded from the real persisted difficulty (not Snake's own `?? 'none'`
+  // default) so "One Player" keeps defaulting to today's vsCpu behavior; a player has to explicitly
+  // pick "None" to reach solo/Brickbreaker. Only ever meaningful mid-vsCpu-setup: never read once
+  // finalMode is committed below.
+  const [difficulty, setDifficulty] = useState<AIDifficultyChoice>(settings.aiDifficulty)
+  const handleDifficultyChange = useCallback(
+    (value: AIDifficultyChoice) => {
+      setDifficulty(value)
+      // 'none' is deliberately never persisted as a real aiDifficulty — see finalMode below, which
+      // is what actually turns it into GameMode 'solo'.
+      if (value !== 'none') setSettings({ aiDifficulty: value })
+    },
+    [setSettings]
+  )
+  // The route's own gameMode stays 'vsCpu' throughout the whole One-Player setup flow (panel
+  // layout, allowSwapTaken, etc. all still key off it unchanged) — finalMode is only what actually
+  // gets committed once Ready is pressed, mirroring Snake's identical routeMode/finalMode split.
+  const finalMode: GameMode = gameMode === 'vsCpu' && difficulty === 'none' ? 'solo' : gameMode
   const { profiles, lastSelected, selectProfile } = useProfiles()
   // orientationMode just follows the device's current physical tilt (see useAccelerometerOrientation),
   // CPU games included — how you're holding the phone right now decides the panel arrangement, not
@@ -261,12 +284,12 @@ export default function LoadoutScreen() {
 
   useEffect(() => {
     if (!humanPlayers.every((p) => ready[p])) return
-    // `gameMode` here, not `settings.gameMode` — same race the comment above guards against: this
-    // screen's own route param is the trustworthy value, not the settings hook's own (possibly
-    // still-loading) copy.
-    commitRoundSettings({ ...settings, gameMode })
+    // finalMode, not `settings.gameMode` — same race the comment above guards against: this
+    // screen's own route param (by way of finalMode's difficulty === 'none' resolution) is the
+    // trustworthy value, not the settings hook's own (possibly still-loading) copy.
+    commitRoundSettings({ ...settings, gameMode: finalMode })
     router.push('/game')
-  }, [ready, humanPlayers, settings, gameMode, commitRoundSettings])
+  }, [ready, humanPlayers, settings, finalMode, commitRoundSettings])
 
   const bg = dark ? '#000000' : '#FFFFFF'
   const fg = dark ? '#FFFFFF' : '#000000'
@@ -310,7 +333,32 @@ export default function LoadoutScreen() {
   // popover is open, rather than trying to reconcile the two different centers.
   const anyPlayerPickerOpen = !!(controlsHost.openId?.startsWith('p1-') || controlsHost.openId?.startsWith('p2-'))
 
-  const sharedControlsRow = <LoadoutSharedControls host={controlsHost} paddleSize={settings.paddleSize} paddleSizeOptions={PADDLE_SIZE_OPTIONS} onPaddleSizeChange={(value) => setSettings({ paddleSize: value })} ballSpeed={settings.ballSpeed} ballSpeedOptions={BALL_SPEED_OPTIONS} onBallSpeedChange={(value) => setSettings({ ballSpeed: value })} scoreToWin={settings.scoreToWin} scoreToWinOptions={SCORE_TO_WIN_OPTIONS} onScoreToWinChange={(value) => setSettings({ scoreToWin: value })} aiDifficulty={gameMode === 'vsCpu' ? settings.aiDifficulty : undefined} aiDifficultyOptions={gameMode === 'vsCpu' ? AI_DIFFICULTY_OPTIONS : undefined} onAiDifficultyChange={gameMode === 'vsCpu' ? (value) => setSettings({ aiDifficulty: value }) : undefined} accentColor={themeColors.tertiary} mutedColor={fgMuted} onAccentColor={themeColors.onTertiary} dark={dark} />
+  const sharedControlsRow = (
+    <LoadoutSharedControls
+      host={controlsHost}
+      paddleSize={settings.paddleSize}
+      paddleSizeOptions={PADDLE_SIZE_OPTIONS}
+      onPaddleSizeChange={(value) => setSettings({ paddleSize: value })}
+      ballSpeed={settings.ballSpeed}
+      ballSpeedOptions={BALL_SPEED_OPTIONS}
+      onBallSpeedChange={(value) => setSettings({ ballSpeed: value })}
+      scoreToWin={settings.scoreToWin}
+      scoreToWinOptions={SCORE_TO_WIN_OPTIONS}
+      onScoreToWinChange={(value) => setSettings({ scoreToWin: value })}
+      aiDifficulty={gameMode === 'vsCpu' ? difficulty : undefined}
+      aiDifficultyOptions={gameMode === 'vsCpu' ? AI_DIFFICULTY_OPTIONS : undefined}
+      onAiDifficultyChange={gameMode === 'vsCpu' ? handleDifficultyChange : undefined}
+      // Hidden once solo is selected — bricks become mandatory there (see bricksActiveFor), so a
+      // visible "off" toggle would be actively misleading.
+      bricksEnabled={finalMode !== 'solo' ? settings.bricksEnabled : undefined}
+      bricksOption={finalMode !== 'solo' ? BRICKS_OPTION : undefined}
+      onBricksEnabledChange={finalMode !== 'solo' ? (value) => setSettings({ bricksEnabled: value }) : undefined}
+      accentColor={themeColors.tertiary}
+      mutedColor={fgMuted}
+      onAccentColor={themeColors.onTertiary}
+      dark={dark}
+    />
+  )
 
   // Only wrapped for showMetaInSharedBand (see its own comment above) — everywhere else back/
   // settings stay in their usual top corners (CornerActionButtons below). Pong has no randomize/

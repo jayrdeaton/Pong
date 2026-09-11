@@ -18,7 +18,7 @@ export type ControlScheme = KeyScheme | 'mouse'
 // naming-convention note at the top of the design spec this file implements.
 export type GamePhase = 'idle' | 'live' | 'pointScored' | 'gameOver'
 
-export type GameMode = 'twoPlayer' | 'vsCpu'
+export type GameMode = 'twoPlayer' | 'vsCpu' | 'solo'
 
 export type AiDifficulty = 'easy' | 'medium' | 'hard'
 
@@ -36,6 +36,10 @@ export interface GameSettings {
   aiDifficulty: AiDifficulty
   paddleSize: PaddleSizeLevel
   ballSpeed: BallSpeedLevel
+  // 'vsCpu'/'twoPlayer' only — a destructible brick field between the paddles, off by default so
+  // classic Pong is unchanged. Meaningless for 'solo', which is unconditionally a brick field
+  // regardless of this flag (see bricksActiveFor in utils/gameMode.ts).
+  bricksEnabled: boolean
   // Opt-in, same convention AirHockey/BoxHockey both already use — @tastic/split-screen's
   // useAccelerometerOrientation(locked?) takes this directly as its `locked` param, freezing
   // whatever orientationMode/p1OnRight/upsideDown it last resolved to rather than continuing to
@@ -51,6 +55,18 @@ export interface GameSettings {
   // input drives each seat's paddle. 'mouse' (the default) keeps using TouchInputLayer's own drag
   // input unchanged; any KeyScheme routes that seat's paddle through KeyboardInputLayer instead.
   controlScheme: Record<Player, ControlScheme>
+}
+
+// A single destructible brick, in the same LOCAL space as BoardLayout. Deliberately its own type
+// rather than a generic Obstacle — every obstacle in this game is destructible, so there's no
+// non-destructible shape worth factoring out separately (unlike AirHockey/BoxHockey's permanent
+// Obstacle, which this otherwise mirrors).
+export interface Brick {
+  x: number
+  y: number
+  width: number
+  height: number
+  destroyed: boolean
 }
 
 // Single source of truth for court geometry, always expressed in canonical LOCAL space: player 1
@@ -122,6 +138,15 @@ export interface GameState {
   // can't tell "a NEW bounce just happened" apart from "one already happened a tick ago" across
   // renders, which is what a bounce SFX/haptic effect actually needs to key off of.
   bounceCount: number
+  // Always present (empty when bricks aren't active this round) so the TICK substep loop never
+  // needs a conditional just to skip the brick pass. Lives in GameState, not BoardLayout: unlike
+  // AirHockey/BoxHockey's permanently-static obstacles, bricks are destructible round-progress
+  // state, and BoardLayout is recomputed on every resize/rotation — storing destroyed-state there
+  // would silently regenerate a fully-intact field on a mid-round rotation. Rescaled (not
+  // regenerated) on RESCALE — see rescaleBricks in utils/board.ts.
+  bricks: Brick[]
+  // Meaningful only for 'solo' (0 otherwise) — decremented on a miss, <= 0 ends the round as a loss.
+  lives: number
 }
 
 // ─── Stats & achievements ───────────────────────────────────────────────────
@@ -144,6 +169,14 @@ export interface TwoPlayerStats {
   p2Wins: number
 }
 
+// Solo/Brickbreaker has no opponent and no score tuple, so it's neither an OutcomeRecord (vsCpu)
+// nor a seat tally (twoPlayer) — its own minimal shape instead. `cleared` is solo's "win": every
+// brick destroyed before running out of lives.
+export interface SoloStats {
+  played: number
+  cleared: number
+}
+
 // Points for and against across every match, both modes.
 export interface PointTotals {
   scored: number
@@ -153,12 +186,16 @@ export interface PointTotals {
 export interface ProfileStats extends DayStreakState {
   vsCpu: VsCpuStats
   twoPlayer: TwoPlayerStats
+  solo: SoloStats
   points: PointTotals
   shutouts: number
   bestWinMargin: number
   // Per ball-speed tier — the closest thing Pong has to a difficulty modifier the player picks
   // themselves, so "win at every speed" is a meaningful goal.
   bySpeed: Record<BallSpeedLevel, MatchRecord>
+  // Career total, mode-agnostic — bricks can be destroyed in solo OR the vsCpu/twoPlayer Bricks
+  // toggle, and there's no reason to fragment one counter into two for that.
+  bricksDestroyed: number
 }
 
 export interface StatsState extends ProfileStats {

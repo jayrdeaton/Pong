@@ -1,6 +1,6 @@
 import { DEFAULT_DAY_STREAK, DEFAULT_OUTCOME_RECORD, DEFAULT_WIN_STREAK } from '@tastic/achievements'
 
-import { AiDifficulty, BallSpeedLevel, MatchRecord, PointTotals, ProfileStats, StatsState, TwoPlayerStats, VsCpuStats } from '@/types'
+import { AiDifficulty, BallSpeedLevel, MatchRecord, PointTotals, ProfileStats, SoloStats, StatsState, TwoPlayerStats, VsCpuStats } from '@/types'
 
 // Kept out of hooks/useGameStats.tsx so it's testable without dragging in
 // @react-native-async-storage/async-storage, which throws at import time under Jest's plain Node
@@ -26,6 +26,10 @@ function createDefaultTwoPlayer(): TwoPlayerStats {
   return { played: 0, p1Wins: 0, p2Wins: 0 }
 }
 
+function createDefaultSolo(): SoloStats {
+  return { played: 0, cleared: 0 }
+}
+
 function createDefaultPoints(): PointTotals {
   return { scored: 0, conceded: 0 }
 }
@@ -44,21 +48,25 @@ function createDefaultBySpeed(): Record<BallSpeedLevel, MatchRecord> {
 export const DEFAULT_PROFILE_STATS: ProfileStats = {
   vsCpu: createDefaultVsCpu(),
   twoPlayer: createDefaultTwoPlayer(),
+  solo: createDefaultSolo(),
   points: createDefaultPoints(),
   shutouts: 0,
   bestWinMargin: 0,
   bySpeed: createDefaultBySpeed(),
+  bricksDestroyed: 0,
   ...DEFAULT_DAY_STREAK
 }
 
-// vsCpu/twoPlayer/points/bySpeed are re-created here rather than spread straight from
+// vsCpu/twoPlayer/solo/points/bySpeed are re-created here rather than spread straight from
 // DEFAULT_PROFILE_STATS, specifically so the two don't end up aliasing the same nested objects —
-// see createDefaultVsCpu's own doc above. shutouts/bestWinMargin/the DEFAULT_DAY_STREAK fields are
-// plain numbers/strings, so aliasing them via the spread below is harmless.
+// see createDefaultVsCpu's own doc above. shutouts/bestWinMargin/bricksDestroyed/the
+// DEFAULT_DAY_STREAK fields are plain numbers/strings, so aliasing them via the spread below is
+// harmless.
 export const DEFAULT_STATS: StatsState = {
   ...DEFAULT_PROFILE_STATS,
   vsCpu: createDefaultVsCpu(),
   twoPlayer: createDefaultTwoPlayer(),
+  solo: createDefaultSolo(),
   points: createDefaultPoints(),
   bySpeed: createDefaultBySpeed(),
   profiles: {},
@@ -86,6 +94,11 @@ function isValidTwoPlayer(value: unknown): value is TwoPlayerStats {
   return typeof value.played === 'number' && typeof value.p1Wins === 'number' && typeof value.p2Wins === 'number'
 }
 
+function isValidSolo(value: unknown): value is SoloStats {
+  if (!isRecord(value)) return false
+  return typeof value.played === 'number' && typeof value.cleared === 'number'
+}
+
 function isValidPoints(value: unknown): value is PointTotals {
   if (!isRecord(value)) return false
   return typeof value.scored === 'number' && typeof value.conceded === 'number'
@@ -99,7 +112,7 @@ function isValidBySpeed(value: unknown): boolean {
 function isValidProfileStats(value: unknown): value is ProfileStats {
   if (!isRecord(value)) return false
   const v = value as Partial<ProfileStats>
-  return isValidVsCpu(v.vsCpu) && isValidTwoPlayer(v.twoPlayer) && isValidPoints(v.points) && typeof v.shutouts === 'number' && typeof v.bestWinMargin === 'number' && isValidBySpeed(v.bySpeed) && typeof v.distinctDaysPlayed === 'number' && typeof v.currentDayStreak === 'number' && typeof v.bestDayStreak === 'number' && (v.lastPlayedDate === null || typeof v.lastPlayedDate === 'string')
+  return isValidVsCpu(v.vsCpu) && isValidTwoPlayer(v.twoPlayer) && isValidSolo(v.solo) && isValidPoints(v.points) && typeof v.shutouts === 'number' && typeof v.bestWinMargin === 'number' && isValidBySpeed(v.bySpeed) && typeof v.bricksDestroyed === 'number' && typeof v.distinctDaysPlayed === 'number' && typeof v.currentDayStreak === 'number' && typeof v.bestDayStreak === 'number' && (v.lastPlayedDate === null || typeof v.lastPlayedDate === 'string')
 }
 
 export function isValidStats(value: unknown): value is StatsState {
