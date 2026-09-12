@@ -35,6 +35,13 @@ interface Props {
   bricksEnabled?: boolean
   bricksOption?: MenuOption<'bricks'>
   onBricksEnabledChange?: (value: boolean) => void
+  // Omitted entirely in twoPlayer (see loadout.tsx) — two people share one device via
+  // TouchInputLayer's split touch zones, and one device-tilt reading can't independently steer two
+  // paddles. Same explicit `!== undefined` presence check as bricksEnabled above, for the same
+  // reason.
+  tiltControlEnabled?: boolean
+  tiltControlOption?: MenuOption<'tiltControl'>
+  onTiltControlEnabledChange?: (value: boolean) => void
   accentColor: string
   mutedColor: string
   onAccentColor?: string
@@ -51,9 +58,9 @@ interface Props {
 // Exported so loadout.tsx can tell whether one of THIS row's own popovers is open, for
 // SharedActionBand's own popoverOpen prop — see BoxHockey's/AirHockey's/Snake's identical
 // LOADOUT_SHARED_CONTROLS_IDS.
-export const LOADOUT_SHARED_CONTROLS_IDS = ['paddleBallPhysics', 'scoreToWin', 'aiDifficulty', 'bricks']
+export const LOADOUT_SHARED_CONTROLS_IDS = ['paddleBallPhysics', 'scoreToWin', 'aiDifficulty', 'bricks', 'tiltControl']
 
-export function LoadoutSharedControls({ host: sharedHost, paddleSize, paddleSizeOptions, onPaddleSizeChange, ballSpeed, ballSpeedOptions, onBallSpeedChange, scoreToWin, scoreToWinOptions, onScoreToWinChange, aiDifficulty, aiDifficultyOptions, onAiDifficultyChange, bricksEnabled, bricksOption, onBricksEnabledChange, accentColor, mutedColor, onAccentColor, dark }: Props) {
+export function LoadoutSharedControls({ host: sharedHost, paddleSize, paddleSizeOptions, onPaddleSizeChange, ballSpeed, ballSpeedOptions, onBallSpeedChange, scoreToWin, scoreToWinOptions, onScoreToWinChange, aiDifficulty, aiDifficultyOptions, onAiDifficultyChange, bricksEnabled, bricksOption, onBricksEnabledChange, tiltControlEnabled, tiltControlOption, onTiltControlEnabledChange, accentColor, mutedColor, onAccentColor, dark }: Props) {
   const ownHost = usePopoverHost()
   const host = sharedHost ?? ownHost
   // See PlayerSetupPanel's identical ownPopoverOpen comment — elevating this row for *any* open
@@ -65,6 +72,7 @@ export function LoadoutSharedControls({ host: sharedHost, paddleSize, paddleSize
   // showAiDifficulty's `!!(aiDifficulty && ...)` pattern above would hide this row precisely when
   // bricks are off, i.e. almost always.
   const showBricks = bricksEnabled !== undefined && !!bricksOption && !!onBricksEnabledChange
+  const showTiltControl = tiltControlEnabled !== undefined && !!tiltControlOption && !!onTiltControlEnabledChange
 
   return (
     <View style={[styles.row, ownPopoverOpen && styles.rowOpen]}>
@@ -98,6 +106,8 @@ export function LoadoutSharedControls({ host: sharedHost, paddleSize, paddleSize
       there's only one, so it gets its own standalone trigger rather than sharing one with an
       unrelated picker). */}
       {showBricks && <SectionedDropdown id='bricks' host={host} icon='view-grid' accessibilityLabel='Bricks' sections={[{ kind: 'multi', id: 'bricks', options: [bricksOption!], value: bricksEnabled ? [bricksOption!.value] : [], onChange: (value) => onBricksEnabledChange!(value.includes(bricksOption!.value)) }]} accentColor={accentColor} mutedColor={mutedColor} onAccentColor={onAccentColor} dark={dark} />}
+
+      {showTiltControl && <SectionedDropdown id='tiltControl' host={host} icon='screen-rotation' accessibilityLabel='Tilt Control' sections={[{ kind: 'multi', id: 'tiltControl', options: [tiltControlOption!], value: tiltControlEnabled ? [tiltControlOption!.value] : [], onChange: (value) => onTiltControlEnabledChange!(value.includes(tiltControlOption!.value)) }]} accentColor={accentColor} mutedColor={mutedColor} onAccentColor={onAccentColor} dark={dark} />}
     </View>
   )
 }

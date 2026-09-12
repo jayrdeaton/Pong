@@ -15,7 +15,8 @@ export const DEFAULT_SETTINGS: GameSettings = {
   deferBottomEdgeGestures: false,
   // Asymmetric defaults (not both 'mouse') so two seats sharing one desktop's keyboard/mouse don't
   // start out colliding — mirrors Snake's identical reasoning for the same field.
-  controlScheme: { 1: 'mouse', 2: 'wasd' }
+  controlScheme: { 1: 'mouse', 2: 'wasd' },
+  tiltControlEnabled: false
 }
 
 function isValidControlScheme(value: unknown): value is ControlScheme {
@@ -25,5 +26,5 @@ function isValidControlScheme(value: unknown): value is ControlScheme {
 export function isValidSettings(value: unknown): value is GameSettings {
   if (!value || typeof value !== 'object') return false
   const v = value as Partial<GameSettings>
-  return (v.gameMode === 'twoPlayer' || v.gameMode === 'vsCpu' || v.gameMode === 'solo') && typeof v.scoreToWin === 'number' && (v.aiDifficulty === 'easy' || v.aiDifficulty === 'medium' || v.aiDifficulty === 'hard') && (v.paddleSize === 'small' || v.paddleSize === 'medium' || v.paddleSize === 'large') && (v.ballSpeed === 'slow' || v.ballSpeed === 'medium' || v.ballSpeed === 'fast') && typeof v.bricksEnabled === 'boolean' && typeof v.lockOrientation === 'boolean' && typeof v.deferBottomEdgeGestures === 'boolean' && !!v.controlScheme && isValidControlScheme(v.controlScheme[1]) && isValidControlScheme(v.controlScheme[2])
+  return (v.gameMode === 'twoPlayer' || v.gameMode === 'vsCpu' || v.gameMode === 'solo') && typeof v.scoreToWin === 'number' && (v.aiDifficulty === 'easy' || v.aiDifficulty === 'medium' || v.aiDifficulty === 'hard') && (v.paddleSize === 'small' || v.paddleSize === 'medium' || v.paddleSize === 'large') && (v.ballSpeed === 'slow' || v.ballSpeed === 'medium' || v.ballSpeed === 'fast') && typeof v.bricksEnabled === 'boolean' && typeof v.lockOrientation === 'boolean' && typeof v.deferBottomEdgeGestures === 'boolean' && !!v.controlScheme && isValidControlScheme(v.controlScheme[1]) && isValidControlScheme(v.controlScheme[2]) && typeof v.tiltControlEnabled === 'boolean'
 }

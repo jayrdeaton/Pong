@@ -12,11 +12,11 @@ SplashScreen.setOptions({ fade: true, duration: 400 })
 
 // Prefixed distinctly from BoxHockey's own `boxhockey.*` keys so a device with both games
 // installed never cross-contaminates appearance/color settings.
-const APPEARANCE_STORAGE_KEY = 'airhockey.appearance'
+const APPEARANCE_STORAGE_KEY = 'pong.appearance'
 // Doubles as /loadout's own "last guest color" slot (see PLAYER_COLORS_STORAGE_KEY's own read
 // below vs. that screen's seat-aware writes) — a human seat with no profile selected is exactly
 // what this key already meant before profiles/CPU existed, so reusing it needs no third key.
-export const PLAYER_COLORS_STORAGE_KEY = 'airhockey.playerColors'
+export const PLAYER_COLORS_STORAGE_KEY = 'pong.playerColors'
 // /loadout's own slot, independent of the guest one above — CPU only ever plays P2 (see
 // utils/gameMode.ts), so this is never keyed per-seat.
 export const CPU_COLOR_STORAGE_KEY = 'pong.cpuColor'

@@ -38,7 +38,7 @@
     "@rific/updater": "^0.6.0",
     "@shopify/react-native-skia": "2.6.2",
     "@tastic/achievements": "^0.1.1",
-    "@tastic/core": "^0.3.0",
+    "@tastic/core": "^0.4.1",
     "@tastic/edge-guard": "^0.1.3",
     "@tastic/hud": "^0.8.1",
     "@tastic/input": "^0.2.0",

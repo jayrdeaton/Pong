@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Board from '@/components/BoardHost'
 import KeyboardInputLayer from '@/components/KeyboardInputLayer'
 import { SettingsDialog } from '@/components/SettingsDialog'
+import TiltInputLayer from '@/components/TiltInputLayer'
 import TouchInputLayer from '@/components/TouchInputLayer'
 import { ACHIEVEMENT_TIER_COLORS } from '@/constants/achievements'
 import { MONO_FONT } from '@/constants/fonts'
@@ -25,7 +26,7 @@ import { useGameStats } from '@/hooks/useGameStats'
 import { useProfiles } from '@/hooks/useProfiles'
 import { Player } from '@/types'
 import { computeBoardLayout } from '@/utils/board'
-import { humanPlayersFor } from '@/utils/gameMode'
+import { humanPlayersFor, tiltControlActiveFor } from '@/utils/gameMode'
 import { DEFAULT_SETTINGS } from '@/utils/gameSettingsValidation'
 import { safeBack } from '@/utils/navigation'
 
@@ -71,6 +72,7 @@ export default function GameScreen() {
   const aiPlayer: Player | null = roundSettings.gameMode === 'vsCpu' ? 2 : null
   const aiDifficulty = roundSettings.aiDifficulty
   const humanPlayers = humanPlayersFor(roundSettings.gameMode)
+  const tiltControlActive = tiltControlActiveFor(roundSettings.gameMode, roundSettings.tiltControlEnabled)
 
   // ─── Orientation / rotation ────────────────────────────────────────────────
   // orientationMode/upsideDown are live accelerometer tilt readings (frozen at their last value
@@ -107,7 +109,14 @@ export default function GameScreen() {
   // rather than reasoned out in the abstract, this polarity should be spot-checked in a simulator by
   // rotating through both faceToFace placements and flipped if player 1's paddle doesn't end up
   // nearest whichever seat is holding the device's own "right-side-up" reading direction.
-  const { orientationMode, upsideDown } = useAccelerometerOrientation(roundSettings.lockOrientation)
+  // `|| tiltControlActive` — forced regardless of the user's own Lock Orientation setting whenever
+  // tilt steering is active: this same live reading drives the board's own `rotation` below, and a
+  // sustained extreme steering tilt held past this hook's own ~275ms commit window could otherwise
+  // cross its dominance-ratio threshold and flip orientationMode/upsideDown, visually rotating the
+  // whole board mid-rally. roundSettings is frozen for the entire round (see
+  // useGameSettings.tsx's own activeRoundSettings doc), so this engages the instant this screen
+  // mounts — well before any actual tilt-steering begins — and never toggles again mid-round.
+  const { orientationMode, upsideDown } = useAccelerometerOrientation(roundSettings.lockOrientation || tiltControlActive)
   // vsCpu always seats the sole human at player 1 (see humanPlayersFor) — pin them to the visual
   // bottom of a portrait/faceToFace hold, the natural single-hand grip, rather than the ±90/
   // upsideDown pairing above. That pairing is tuned for two-player pass-and-play, where either seat
@@ -318,6 +327,11 @@ export default function GameScreen() {
       every frame internally (not reactively), so passing the current `paddles` snapshot here on
       every render is exactly right, not stale. */}
       <KeyboardInputLayer enabled={!paused && phase !== 'gameOver'} humanPlayers={humanPlayers} controlScheme={roundSettings.controlScheme} paddleY={{ 1: paddles[1].y, 2: paddles[2].y }} onPaddleTargetY={setPaddleTarget} />
+
+      {/* Additive on top of TouchInputLayer's own always-on drag input, same precedent as
+      KeyboardInputLayer above — see that component's own doc for why this never disables touch.
+      Always mounted (inert whenever `enabled` is false), same convention as the other two layers. */}
+      <TiltInputLayer player={humanPlayers[0]} enabled={tiltControlActive && !paused && phase !== 'gameOver'} phase={phase} rotation={rotation} board={board} paddleY={paddles[humanPlayers[0]].y} onPaddleTargetY={setPaddleTarget} />
 
       {/* Score labels — plain react-native-paper Text, not on the Skia canvas, each individually
           rotated to face its own player correctly (see p1/p2 rotation comment above) and anchored

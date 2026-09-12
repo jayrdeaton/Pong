@@ -6,8 +6,8 @@ import * as RNPaper from 'react-native-paper'
 
 import { useSplashReady } from '@/utils/splashGate'
 
-const HAPTIC_STORAGE_KEY = 'airhockey.vibrate'
-const SOUND_STORAGE_KEY = 'airhockey.sound'
+const HAPTIC_STORAGE_KEY = 'pong.vibrate'
+const SOUND_STORAGE_KEY = 'pong.sound'
 
 interface Props {
   children: ReactNode

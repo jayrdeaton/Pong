@@ -4,7 +4,7 @@ import { CornerActionButtons, MenuOption, PressAwayOverlay, ReadyButton, SharedA
 import { DualZoneLayout, FakeLandscapeView, getViewRotation, needsSharedNeutralZone, rotateInsets, useAccelerometerOrientation, useDualZoneLayout } from '@tastic/split-screen'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { Platform, StyleSheet, View } from 'react-native'
 import Animated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -56,6 +56,8 @@ const AI_DIFFICULTY_OPTIONS: MenuOption<AIDifficultyChoice>[] = [
 ]
 
 const BRICKS_OPTION: MenuOption<'bricks'> = { value: 'bricks', label: 'Bricks', icon: 'view-grid' }
+
+const TILT_CONTROL_OPTION: MenuOption<'tiltControl'> = { value: 'tiltControl', label: 'Tilt Control', icon: 'screen-rotation' }
 
 // Left icon-less, mirroring Snake's own CONTROL_SCHEME_OPTIONS exactly — there's no
 // MaterialCommunityIcons glyph that reads as "WASD" or "IJKL" at a glance the other option lists
@@ -353,6 +355,12 @@ export default function LoadoutScreen() {
       bricksEnabled={finalMode !== 'solo' ? settings.bricksEnabled : undefined}
       bricksOption={finalMode !== 'solo' ? BRICKS_OPTION : undefined}
       onBricksEnabledChange={finalMode !== 'solo' ? (value) => setSettings({ bricksEnabled: value }) : undefined}
+      // Hidden for twoPlayer (see tiltControlActiveFor) and on web — expo-sensors never populates a
+      // usable tilt reading there (see TiltInputLayer's own doc), so a visible toggle would just be
+      // a dead control.
+      tiltControlEnabled={finalMode !== 'twoPlayer' && Platform.OS !== 'web' ? settings.tiltControlEnabled : undefined}
+      tiltControlOption={finalMode !== 'twoPlayer' && Platform.OS !== 'web' ? TILT_CONTROL_OPTION : undefined}
+      onTiltControlEnabledChange={finalMode !== 'twoPlayer' && Platform.OS !== 'web' ? (value) => setSettings({ tiltControlEnabled: value }) : undefined}
       accentColor={themeColors.tertiary}
       mutedColor={fgMuted}
       onAccentColor={themeColors.onTertiary}

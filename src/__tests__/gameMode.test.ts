@@ -1,4 +1,4 @@
-import { bricksActiveFor, humanPlayersFor, parseGameMode } from '@/utils/gameMode'
+import { bricksActiveFor, humanPlayersFor, parseGameMode, tiltControlActiveFor } from '@/utils/gameMode'
 
 describe('parseGameMode', () => {
   it('parses a valid route param', () => {
@@ -40,5 +40,19 @@ describe('bricksActiveFor', () => {
     expect(bricksActiveFor('vsCpu', true)).toBe(true)
     expect(bricksActiveFor('twoPlayer', false)).toBe(false)
     expect(bricksActiveFor('twoPlayer', true)).toBe(true)
+  })
+})
+
+describe('tiltControlActiveFor', () => {
+  it('is unconditionally false for twoPlayer, regardless of the stored toggle', () => {
+    expect(tiltControlActiveFor('twoPlayer', false)).toBe(false)
+    expect(tiltControlActiveFor('twoPlayer', true)).toBe(false)
+  })
+
+  it('follows the toggle for vsCpu and solo', () => {
+    expect(tiltControlActiveFor('vsCpu', false)).toBe(false)
+    expect(tiltControlActiveFor('vsCpu', true)).toBe(true)
+    expect(tiltControlActiveFor('solo', false)).toBe(false)
+    expect(tiltControlActiveFor('solo', true)).toBe(true)
   })
 })

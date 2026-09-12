@@ -78,6 +78,36 @@ export const SHARED_BRICK_FIELD_Y_MARGIN_RATIO = 0.08
 // Solo/Brickbreaker only.
 export const SOLO_LIVES = 3
 
+// ─── Tilt control (vsCpu/solo only — see tiltControlActiveFor in utils/gameMode.ts) ────────────
+
+// Fast DeviceMotion sampling while a tilt-controlled paddle is actively steering — much finer
+// grained than @tastic/core's own useOrientationState (see ORIENTATION_SENSOR_DEFAULT_INTERVAL_MS
+// below), which only needs to detect coarse hold changes every ~100ms. Continuous paddle steering
+// reads as noticeably laggier/steppier at that rate, so TiltInputLayer requests this faster one
+// ONLY while its own subscription is active — expo-sensors' DeviceMotion.setUpdateInterval is a
+// GLOBAL setting on the shared sensor singleton, not scoped per listener, so this has to be paired
+// with restoring the default below whenever tilt control isn't active.
+export const TILT_UPDATE_INTERVAL_MS = 20
+
+// Local mirror of @tastic/core's own useOrientationState.tsx UPDATE_INTERVAL_MS (100) — that
+// constant isn't exported by the package, so it can't be imported directly. TiltInputLayer restores
+// the shared DeviceMotion singleton to exactly this rate whenever its own subscription tears down
+// (disabled, paused, or unmounted), so the app's baseline orientation-hold-detection sampling rate
+// is never left elevated for the rest of the session after a tilt-controlled round ends.
+export const ORIENTATION_SENSOR_DEFAULT_INTERVAL_MS = 100
+
+// Degrees of beta/gamma drift from the calibrated baseline (see utils/tiltInput.ts) that produce
+// ZERO paddle movement — absorbs natural hand tremor and grip micro-adjustments that would
+// otherwise read as constant low-amplitude paddle jitter rather than deliberate steering.
+export const TILT_DEAD_ZONE_DEG = 2
+
+// Degrees of beta/gamma drift (beyond the dead zone above) at which the paddle reaches the extreme
+// of its own travel range (paddleMinY/paddleMaxY). A first-guess tuning value — like the axis
+// mapping itself (see tiltInput.ts's own doc), how far someone naturally tilts a device while
+// holding it is something to spot-check on a real device/simulator, not derive from first
+// principles.
+export const TILT_MAX_DEG = 25
+
 // A brick or wall bounce (unlike a paddle hit) has no steering and is perfectly elastic — with
 // zero jitter, the ball can settle into a stable periodic orbit inside a partially-cleared pocket
 // (bouncing the same closed path between the remaining brick faces and/or the top/bottom walls

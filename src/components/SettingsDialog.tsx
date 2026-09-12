@@ -1,4 +1,5 @@
 import { useToast } from '@rific/toaster'
+import type { ViewRotation } from '@tastic/core'
 import { BaseSettingsDialog } from '@tastic/hud'
 
 import { release } from '@/constants/release'
@@ -11,7 +12,7 @@ export interface SettingsDialogProps {
   // as a centered Portal modal, unaffected by whichever screen's own FakeLandscapeView wraps its
   // trigger, so it has to rotate its own card content to read right-side-up for whichever way the
   // phone is actually being held. Defaults to 0 (unrotated) for any caller that doesn't track it.
-  rotation?: number
+  rotation?: ViewRotation
 }
 
 // Thin adapter over @tastic/hud's shared settings shell — Pong's own GameSettings (lock

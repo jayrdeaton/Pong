@@ -55,6 +55,14 @@ export interface GameSettings {
   // input drives each seat's paddle. 'mouse' (the default) keeps using TouchInputLayer's own drag
   // input unchanged; any KeyScheme routes that seat's paddle through KeyboardInputLayer instead.
   controlScheme: Record<Player, ControlScheme>
+  // Opt-in device-tilt paddle steering — single-player only (vsCpu/solo, wherever
+  // humanPlayersFor(gameMode).length === 1 — see tiltControlActiveFor in utils/gameMode.ts).
+  // Inert in twoPlayer regardless of this flag: two people share one device via TouchInputLayer's
+  // split touch zones, and one tilt reading can't independently steer two paddles. Additive on top
+  // of TouchInputLayer's own drag input, same "adds a method, never removes one" precedent
+  // KeyboardInputLayer already established. Off by default, same opt-in convention as
+  // lockOrientation/deferBottomEdgeGestures above.
+  tiltControlEnabled: boolean
 }
 
 // A single destructible brick, in the same LOCAL space as BoardLayout. Deliberately its own type

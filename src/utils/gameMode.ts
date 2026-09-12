@@ -21,3 +21,13 @@ export function humanPlayersFor(gameMode: GameMode): Player[] {
 export function bricksActiveFor(gameMode: GameMode, bricksEnabled: boolean): boolean {
   return gameMode === 'solo' || bricksEnabled
 }
+
+// Single source of truth for "is this round's paddle steerable by device tilt" — the mirror image
+// of bricksActiveFor above: twoPlayer is unconditionally EXCLUDED regardless of the stored toggle,
+// since two people share one device via TouchInputLayer's split touch zones and one tilt reading
+// can't independently steer two paddles. Called from game.tsx (enabling TiltInputLayer and forcing
+// useAccelerometerOrientation's `locked` param — see that call site's own comment) and loadout.tsx
+// (whether to show the tilt toggle at all).
+export function tiltControlActiveFor(gameMode: GameMode, tiltControlEnabled: boolean): boolean {
+  return gameMode !== 'twoPlayer' && tiltControlEnabled
+}
