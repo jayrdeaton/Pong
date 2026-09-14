@@ -9,8 +9,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import * as RNPaper from 'react-native-paper'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 
-import { Feedback } from '@/components/Feedback'
 import { Fonts } from '@/components/Fonts'
+import { Providers } from '@/components/Providers'
 import { Theme } from '@/components/Theme'
 import { UpdateDialog } from '@/components/UpdateDialog'
 import { GameSettingsProvider, useGameSettings } from '@/hooks/useGameSettings'
@@ -56,7 +56,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <Fonts>
-          <Feedback>
+          <Providers>
             <Theme>
               <GameSettingsProvider>
                 <SettingsGate>
@@ -78,7 +78,7 @@ export default function RootLayout() {
                 </SettingsGate>
               </GameSettingsProvider>
             </Theme>
-          </Feedback>
+          </Providers>
         </Fonts>
       </SafeAreaProvider>
     </GestureHandlerRootView>

@@ -1,6 +1,7 @@
 import { useAutoPaperTheme } from '@rific/auto-paper'
 import { Button, IconButton, useVibration } from '@rific/feedback-press'
 import { useToast } from '@rific/toaster'
+import { ConfirmDialog } from '@tastic/hud'
 import { ProfileChip } from '@tastic/profile'
 import { needsSharedNeutralZone, rotateInsets, useAccelerometerOrientation } from '@tastic/split-screen'
 import { router } from 'expo-router'
@@ -430,34 +431,33 @@ export default function GameScreen() {
           </View>
         ))}
 
-      {/* Quit confirmation */}
-      {confirmBackVisible && (
-        <View style={styles.overlay}>
-          <View style={[styles.overlayCard, { backgroundColor: cardBg, borderColor: cardBorder }, rotationStyle]}>
-            <Icon source='alert-circle-outline' size={64} color={themeColors.secondary} />
-            <Text variant='headlineLarge' style={[styles.overlayTitle, { color: themeColors.secondary, fontFamily: MONO_FONT }]}>
-              Quit Match?
+      {/* Quit confirmation — shared @tastic/hud dialog; accepts its primary accent + default font
+          in place of this dialog's previous secondary-accent Quit button and MONO_FONT styling
+          (a deliberate trade-off for convergence onto the shared component). */}
+      <ConfirmDialog
+        visible={confirmBackVisible}
+        title='Quit Match?'
+        message={
+          isSolo ? (
+            <Text style={{ color: fgMuted }}>
+              {lives} {lives === 1 ? 'life' : 'lives'} · {bricks.filter((b) => b.destroyed).length} / {bricks.length} bricks
             </Text>
-            {isSolo ? (
-              <Text variant='bodyLarge' style={[styles.overlayScore, { color: fgMuted, fontFamily: MONO_FONT }]}>
-                {lives} {lives === 1 ? 'life' : 'lives'} · {bricks.filter((b) => b.destroyed).length} / {bricks.length} bricks
-              </Text>
-            ) : (
-              <Text variant='bodyLarge' style={[styles.overlayScore, { fontFamily: MONO_FONT }]}>
-                <Text style={{ color: playerColor[1] }}>{scores[0]}</Text>
-                <Text style={{ color: fgMuted }}> – </Text>
-                <Text style={{ color: playerColor[2] }}>{scores[1]}</Text>
-              </Text>
-            )}
-            <Button mode='contained' onPress={() => setConfirmBackVisible(false)} style={styles.overlayButton} buttonColor={themeColors.primary} textColor={themeColors.onPrimary}>
-              Cancel
-            </Button>
-            <Button mode='contained' onPress={safeBack} style={styles.overlayButton} buttonColor={themeColors.secondary} textColor={themeColors.onSecondary}>
-              Quit
-            </Button>
-          </View>
-        </View>
-      )}
+          ) : (
+            <>
+              <Text style={{ color: playerColor[1] }}>{scores[0]}</Text>
+              <Text style={{ color: fgMuted }}> – </Text>
+              <Text style={{ color: playerColor[2] }}>{scores[1]}</Text>
+            </>
+          )
+        }
+        confirmLabel='Quit'
+        cancelLabel='Cancel'
+        icon='alert-circle-outline'
+        destructive={false}
+        onConfirm={safeBack}
+        onCancel={() => setConfirmBackVisible(false)}
+        rotation={rotation}
+      />
 
       {/* rotation={rotation} — same physical-hold-compensating rotation the board itself uses (see
           the rotation comment above), not a separate reading; previously omitted, leaving this
