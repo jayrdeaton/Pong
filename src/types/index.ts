@@ -40,8 +40,8 @@ export interface GameSettings {
   // classic Pong is unchanged. Meaningless for 'solo', which is unconditionally a brick field
   // regardless of this flag (see bricksActiveFor in utils/gameMode.ts).
   bricksEnabled: boolean
-  // Opt-in, same convention AirHockey/BoxHockey both already use — @tastic/split-screen's
-  // useAccelerometerOrientation(locked?) takes this directly as its `locked` param, freezing
+  // Opt-in, same convention AirHockey/BoxHockey both already use — @tastic/core's
+  // useOrientationState(locked?) takes this directly as its `locked` param, freezing
   // whatever orientationMode/p1OnRight/upsideDown it last resolved to rather than continuing to
   // track live device tilt. Off by default: the seating layout just follows however the device is
   // actually being held.

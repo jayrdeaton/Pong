@@ -2,7 +2,6 @@ import { MenuOption, PopoverHost, SectionedDropdown, usePopoverHost } from '@tas
 import { StyleSheet, View } from 'react-native'
 
 import { BallSpeedLevel, PaddleSizeLevel } from '@/types'
-import { AIDifficultyChoice } from '@/utils/aiOpponent'
 
 interface Props {
   // Shared popover host — see PlayerSetupPanel's identical `host` prop. loadout.tsx always passes
@@ -23,12 +22,6 @@ interface Props {
   scoreToWin: number
   scoreToWinOptions: MenuOption<number>[]
   onScoreToWinChange: (value: number) => void
-  // Omitted entirely for two-player — there's no CPU to tune the difficulty of. AIDifficultyChoice
-  // (not plain AIDifficulty) so the "None" value — which resolves the round to solo/Brickbreaker
-  // rather than a real difficulty — can flow through this same picker (see app/loadout.tsx).
-  aiDifficulty?: AIDifficultyChoice
-  aiDifficultyOptions?: MenuOption<AIDifficultyChoice>[]
-  onAiDifficultyChange?: (value: AIDifficultyChoice) => void
   // Omitted entirely once solo is selected (bricks become mandatory there — see loadout.tsx) or in
   // any context that doesn't offer the toggle. Deliberately a boolean, not the aiDifficulty pattern
   // above — see the explicit `!== undefined` presence check below rather than a truthy one.
@@ -58,16 +51,15 @@ interface Props {
 // Exported so loadout.tsx can tell whether one of THIS row's own popovers is open, for
 // SharedActionBand's own popoverOpen prop — see BoxHockey's/AirHockey's/Snake's identical
 // LOADOUT_SHARED_CONTROLS_IDS.
-export const LOADOUT_SHARED_CONTROLS_IDS = ['paddleBallPhysics', 'scoreToWin', 'aiDifficulty', 'bricks', 'tiltControl']
+export const LOADOUT_SHARED_CONTROLS_IDS = ['paddleBallPhysics', 'scoreToWin', 'bricks', 'tiltControl']
 
-export function LoadoutSharedControls({ host: sharedHost, paddleSize, paddleSizeOptions, onPaddleSizeChange, ballSpeed, ballSpeedOptions, onBallSpeedChange, scoreToWin, scoreToWinOptions, onScoreToWinChange, aiDifficulty, aiDifficultyOptions, onAiDifficultyChange, bricksEnabled, bricksOption, onBricksEnabledChange, tiltControlEnabled, tiltControlOption, onTiltControlEnabledChange, accentColor, mutedColor, onAccentColor, dark }: Props) {
+export function LoadoutSharedControls({ host: sharedHost, paddleSize, paddleSizeOptions, onPaddleSizeChange, ballSpeed, ballSpeedOptions, onBallSpeedChange, scoreToWin, scoreToWinOptions, onScoreToWinChange, bricksEnabled, bricksOption, onBricksEnabledChange, tiltControlEnabled, tiltControlOption, onTiltControlEnabledChange, accentColor, mutedColor, onAccentColor, dark }: Props) {
   const ownHost = usePopoverHost()
   const host = sharedHost ?? ownHost
   // See PlayerSetupPanel's identical ownPopoverOpen comment — elevating this row for *any* open
   // popover on a shared host (rather than only its own) would tie it with whichever sibling panel
   // actually has the open popover, letting DOM order wrongly decide which one paints on top.
   const ownPopoverOpen = host.openId !== null && LOADOUT_SHARED_CONTROLS_IDS.includes(host.openId)
-  const showAiDifficulty = !!(aiDifficulty && aiDifficultyOptions && onAiDifficultyChange)
   // Explicit presence check, NOT a truthy one — bricksEnabled is legitimately false by default, and
   // showAiDifficulty's `!!(aiDifficulty && ...)` pattern above would hide this row precisely when
   // bricks are off, i.e. almost always.
@@ -98,8 +90,6 @@ export function LoadoutSharedControls({ host: sharedHost, paddleSize, paddleSize
       />
 
       <SectionedDropdown id='scoreToWin' host={host} icon='flag-checkered' accessibilityLabel='Score to win' sections={[{ kind: 'single', id: 'scoreToWin', options: scoreToWinOptions, value: scoreToWin, onChange: onScoreToWinChange }]} accentColor={accentColor} mutedColor={mutedColor} onAccentColor={onAccentColor} dark={dark} />
-
-      {showAiDifficulty && <SectionedDropdown id='aiDifficulty' host={host} icon='chip' accessibilityLabel='CPU difficulty' sections={[{ kind: 'single', id: 'aiDifficulty', options: aiDifficultyOptions!, value: aiDifficulty!, onChange: onAiDifficultyChange! }]} accentColor={accentColor} mutedColor={mutedColor} onAccentColor={onAccentColor} dark={dark} />}
 
       {/* Single boolean via a one-option 'multi' section — presence in the value array is "on",
       same idiom Snake's own fullScreen/wrapEdges toggles use (there bundled two together; here

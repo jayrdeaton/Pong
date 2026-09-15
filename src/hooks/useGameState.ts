@@ -264,7 +264,7 @@ export function useGameState(board: BoardLayout, scoreToWin: number, ballSpeedLe
 
   // useReducer's lazy init (the `board` argument passed to useReducer above) only ever runs ONCE,
   // at this hook's very first mount — but `board` itself can change again at any later point too:
-  // useSafeAreaInsets/useAccelerometerOrientation both resolve asynchronously after game.tsx's
+  // useSafeAreaInsets/useOrientationState both resolve asynchronously after game.tsx's
   // first paint, a live window resize can fire at any time, and rotating the device mid-rally
   // genuinely changes which real dimensions feed computeBoardLayout. Rescaling on every board
   // change (see rescaleBall/rescalePaddleY above), not just while idle, is what actually keeps the

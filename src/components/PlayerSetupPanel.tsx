@@ -1,5 +1,5 @@
 import { SeedColor } from '@rific/auto-paper'
-import { ControlSchemePicker, InlineColorPicker, MenuOption, PopoverHost, ReadyButton, usePopoverHost } from '@tastic/hud'
+import { ControlSchemePicker, InlineColorPicker, LabeledDropdown, MenuOption, PopoverHost, ReadyButton, usePopoverHost } from '@tastic/hud'
 import { Profile, ProfilePicker } from '@tastic/profile'
 import { useCallback } from 'react'
 import { StyleSheet, View } from 'react-native'
@@ -7,6 +7,7 @@ import { Text } from 'react-native-paper'
 
 import { MONO_FONT } from '@/constants/fonts'
 import { ControlScheme } from '@/types'
+import { AIDifficultyChoice } from '@/utils/aiOpponent'
 
 export interface PlayerSetupPanelProps {
   // Namespaces this panel's popover id so two panels can safely share one host (see `host` below)
@@ -27,6 +28,15 @@ export interface PlayerSetupPanelProps {
   takenColor?: string
   allowSwapTaken?: boolean
   isHuman: boolean
+  // Only ever provided for a non-human (CPU) seat — takes the exact same top slot a human seat's
+  // ProfilePicker occupies below (see the ternary in the component body). For a choice that reads
+  // more like "who/what you're playing" than "a game setting," occupying that slot: a saved
+  // identity for a human seat, the CPU's own difficulty for the non-human one. Matches
+  // BoxHockey's/AirHockey's/LightCycles'/Snake's identical convention — this used to live in
+  // LoadoutSharedControls' own shared row instead.
+  cpuDifficulty?: AIDifficultyChoice
+  cpuDifficultyOptions?: MenuOption<AIDifficultyChoice>[]
+  onCpuDifficultyChange?: (value: AIDifficultyChoice) => void
   // Web-only (ControlSchemePicker bakes in its own Platform/touch-primary gate — see that
   // component's own doc in @tastic/hud). Mirrors Snake's identical trio, renamed for Pong's own
   // ControlScheme.
@@ -58,16 +68,17 @@ export interface PlayerSetupPanelProps {
 }
 
 // One panel per player slot in the loadout screen: a name label (tap to switch profiles or create
-// one, human slots only — falls back to the plain `label` text below when profiles isn't wired in),
-// a color picker (interactive for both human and CPU slots, matching the title screen's own past
-// behavior of letting the CPU's color be chosen too) plus a web-only control-scheme picker for human
-// slots, and a Ready toggle for human slots only. Owns its own popover host shared by its own
-// pickers unless a `host` is passed in to share with another panel or the shared controls instead.
+// one, human slots only — falls back to a CPU-difficulty dropdown for a non-human slot with one
+// wired in, or the plain `label` text below when neither is), a color picker (interactive for both
+// human and CPU slots, matching the title screen's own past behavior of letting the CPU's color be
+// chosen too) plus a web-only control-scheme picker for human slots, and a Ready toggle for human
+// slots only. Owns its own popover host shared by its own pickers unless a `host` is passed in to
+// share with another panel or the shared controls instead.
 // Unlike BoxHockey's own version (a pull/push aim-style control-scheme row), this one is about
 // WHICH INPUT drives the paddle at all — Pong's paddle still always follows a mouse/touch drag 1:1
 // live when that's the picked scheme; keyboard is an alternative INPUT SOURCE, not a different feel
 // for the same one.
-export function PlayerSetupPanel({ idPrefix, host, label, color, onColorChange, swatches, takenColor, allowSwapTaken, isHuman, controlScheme, onControlSchemeChange, controlSchemeOptions, otherControlScheme, ready, onToggleReady, dark, showReadyButton = true, profiles, selectedProfileId, takenProfileId, guestLabel, onProfileSelect, onManageProfiles }: PlayerSetupPanelProps) {
+export function PlayerSetupPanel({ idPrefix, host, label, color, onColorChange, swatches, takenColor, allowSwapTaken, isHuman, cpuDifficulty, cpuDifficultyOptions, onCpuDifficultyChange, controlScheme, onControlSchemeChange, controlSchemeOptions, otherControlScheme, ready, onToggleReady, dark, showReadyButton = true, profiles, selectedProfileId, takenProfileId, guestLabel, onProfileSelect, onManageProfiles }: PlayerSetupPanelProps) {
   const ownHost = usePopoverHost()
   const popover = host ?? ownHost
   // Checking *this panel's own* id, not just "is anything open on the host" — when `host` is
@@ -81,6 +92,7 @@ export function PlayerSetupPanel({ idPrefix, host, label, color, onColorChange, 
   const pickerRowPopoverOpen = popover.openId === `${idPrefix}-color` || popover.openId === `${idPrefix}-controls`
   const mutedColor = dark ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)'
   const showProfilePicker = isHuman && profiles !== undefined && !!onProfileSelect
+  const showCpuDifficulty = !isHuman && cpuDifficulty !== undefined && !!cpuDifficultyOptions && !!onCpuDifficultyChange
   // The color button's own tag display (see InlineColorPicker) — read live from the selected
   // profile rather than snapshotted at selection time, since there's no other editing surface for
   // it on this screen at all (see app/profiles.tsx's ProfilesManager, the only place a tag is
@@ -95,6 +107,8 @@ export function PlayerSetupPanel({ idPrefix, host, label, color, onColorChange, 
     <View style={[styles.panel, ownPopoverOpen && styles.panelOpen]}>
       {showProfilePicker ? (
         <ProfilePicker idPrefix={idPrefix} host={popover} profiles={profiles!} selectedId={selectedProfileId ?? null} takenId={takenProfileId} color={color} dark={dark} guestLabel={guestLabel ?? 'GUEST'} onSelect={handleProfileSelect} onManage={onManageProfiles} />
+      ) : showCpuDifficulty ? (
+        <LabeledDropdown id={`${idPrefix}-difficulty`} host={popover} options={cpuDifficultyOptions!} value={cpuDifficulty!} onChange={onCpuDifficultyChange!} color={color} dark={dark} />
       ) : (
         label && (
           <Text variant='labelSmall' style={{ color, fontFamily: MONO_FONT }}>

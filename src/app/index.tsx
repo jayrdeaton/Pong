@@ -1,6 +1,6 @@
 import { useAutoPaperTheme } from '@rific/auto-paper'
 import { Button, IconButton } from '@rific/feedback-press'
-import { FakeLandscapeView, getViewRotation, rotateInsets, useAccelerometerOrientation } from '@tastic/split-screen'
+import { FakeLandscapeView, getViewRotation, rotateInsets, useOrientationState } from '@tastic/core'
 import { router } from 'expo-router'
 import { useCallback, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
@@ -14,12 +14,12 @@ import { GameMode } from '@/types'
 export default function HomeScreen() {
   const { settings, setSettings } = useGameSettings()
   // orientationMode just follows the device's current physical tilt (see
-  // useAccelerometerOrientation), so the title screen rotates along with everywhere else as soon as
+  // useOrientationState), so the title screen rotates along with everywhere else as soon as
   // the phone is turned — Lock Orientation (see SettingsDialog) is the opt-in for pinning it.
   // app.json is portrait-locked at the OS level now (no more real OS rotation to rely on) — see
   // FakeLandscapeView below, which fakes the rest entirely in JS from this hook's live
   // accelerometer reading.
-  const { orientationMode, p1OnRight, upsideDown } = useAccelerometerOrientation(settings.lockOrientation)
+  const { orientationMode, p1OnRight, upsideDown } = useOrientationState(settings.lockOrientation)
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const { colors, dark } = useAutoPaperTheme()
@@ -48,7 +48,7 @@ export default function HomeScreen() {
   return (
     <View style={[styles.container, { backgroundColor: bg }]}>
       {/* Everything below reads correctly no matter which way the phone is actually being held —
-      see @tastic/split-screen's FakeLandscapeView for why this is needed at all now that the app is
+      see @tastic/core's FakeLandscapeView for why this is needed at all now that the app is
       portrait-locked at the OS level (no more real OS rotation to rely on). SettingsDialog is
       deliberately left outside this wrapper — it renders as a centered modal overlay via Portal,
       unaffected by (and not needing) this transform. */}

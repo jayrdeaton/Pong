@@ -1,8 +1,9 @@
 import { Toaster, ToastProvider } from '@rific/toaster'
-import { AccelerometerOrientationProvider } from '@tastic/split-screen'
+import { getViewRotation, OrientationProvider, useOrientationState } from '@tastic/core'
 import * as Haptics from 'expo-haptics'
 import { Stack } from 'expo-router'
 import { DeviceMotion } from 'expo-sensors'
+import { StatusBar } from 'expo-status-bar'
 import { ReactNode } from 'react'
 import { StyleSheet } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -46,9 +47,19 @@ function ProfilesGate({ children }: { children: ReactNode }) {
   )
 }
 
-// AccelerometerOrientationProvider/ProfilesProvider mounted at the same nesting position BoxHockey
+// Hides the OS status bar whenever content elsewhere is visually rotated (see
+// @tastic/core's FakeLandscapeView) — matches AirHockey's/BoxHockey's/LightCycles'/Snake's
+// identical RotationAwareStatusBar. /game additionally hides it unconditionally regardless (see
+// its own <StatusBar hidden />), so this only actually matters on /index, /loadout, /profiles.
+function RotationAwareStatusBar() {
+  const { orientationMode, p1OnRight, upsideDown } = useOrientationState()
+  const rotation = getViewRotation(orientationMode, p1OnRight, upsideDown)
+  return <StatusBar hidden={rotation !== 0} />
+}
+
+// OrientationProvider/ProfilesProvider mounted at the same nesting position BoxHockey
 // uses (see BoxHockey/src/app/_layout.tsx): both inside GameSettingsProvider (game.tsx's
-// useAccelerometerOrientation call needs settings.lockOrientation to be available, though neither
+// useOrientationState call needs settings.lockOrientation to be available, though neither
 // provider actually depends on settings — this just mirrors the established nesting order), outside
 // ToastProvider.
 export default function RootLayout() {
@@ -65,13 +76,14 @@ export default function RootLayout() {
                       <GameStatsProvider>
                         {/* deviceMotion is the app's own real expo-sensors import, injected rather than
                         imported by @tastic/core itself — see that package's own doc for why. */}
-                        <AccelerometerOrientationProvider deviceMotion={DeviceMotion}>
+                        <OrientationProvider deviceMotion={DeviceMotion}>
                           <ToastProvider haptics={Haptics} paper={RNPaper}>
                             <Stack screenOptions={{ headerShown: false, gestureEnabled: false }} />
                             <Toaster />
                             <UpdateDialog />
+                            <RotationAwareStatusBar />
                           </ToastProvider>
-                        </AccelerometerOrientationProvider>
+                        </OrientationProvider>
                       </GameStatsProvider>
                     </ProfilesGate>
                   </ProfilesProvider>

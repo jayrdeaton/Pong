@@ -1,10 +1,10 @@
 import { useAutoPaperTheme } from '@rific/auto-paper'
 import { Button, IconButton, useVibration } from '@rific/feedback-press'
 import { useToast } from '@rific/toaster'
+import { rotateInsets, useOrientationState } from '@tastic/core'
 import { ConfirmDialog } from '@tastic/hud'
 import { ProfileChip } from '@tastic/profile'
-import { needsSharedNeutralZone, rotateInsets, useAccelerometerOrientation } from '@tastic/split-screen'
-import { router } from 'expo-router'
+import { needsSharedNeutralZone } from '@tastic/split-screen'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native'
@@ -59,7 +59,7 @@ function localToScreen(localX: number, localY: number, containerWidth: number, c
 export default function GameScreen() {
   // Committed once by /loadout when every human player readied up — falls back to defaults for a
   // direct/deep link to this screen, which never went through /loadout to commit anything.
-  const { activeRoundSettings } = useGameSettings()
+  const { activeRoundSettings, setIsActivelyPlaying } = useGameSettings()
   const { recordMatchOutcome, recordSoloOutcome } = useGameStats()
   const { success: showAchievementToast } = useToast()
   const roundSettings = activeRoundSettings ?? DEFAULT_SETTINGS
@@ -77,11 +77,11 @@ export default function GameScreen() {
 
   // ─── Orientation / rotation ────────────────────────────────────────────────
   // orientationMode/upsideDown are live accelerometer tilt readings (frozen at their last value
-  // while roundSettings.lockOrientation is on — see useAccelerometerOrientation's own `locked` param,
+  // while roundSettings.lockOrientation is on — see useOrientationState's own `locked` param,
   // the same opt-in convention AirHockey/BoxHockey both already use for their own "Lock Orientation"
   // toggle).
   //
-  // DELIBERATE DEVIATION from calling @tastic/split-screen's getFixedZoneRotation directly: that
+  // DELIBERATE DEVIATION from calling @tastic/core's getFixedZoneRotation directly: that
   // function (verified against the installed package's actual source, src/rotation.ts) returns 0 for
   // 'faceToFace' and ±90 for 'sideBySide' — the correct polarity for BoxHockey/AirHockey's own board,
   // which is PORTRAIT-native in local space (goals/paddle-separation along local Y) and so needs zero
@@ -104,7 +104,7 @@ export default function GameScreen() {
   // needs.
   //
   // The sign for faceToFace is keyed off `upsideDown` (the only live-varying signal in that mode —
-  // useAccelerometerOrientation's own faceToFace reading hardcodes p1OnRight: true, so it can never
+  // useOrientationState's own faceToFace reading hardcodes p1OnRight: true, so it can never
   // actually distinguish anything) rather than derived from theory — like AirHockey's original
   // rotation wrapper, whose own rotation SIGN was "confirmed empirically" against the real render
   // rather than reasoned out in the abstract, this polarity should be spot-checked in a simulator by
@@ -117,7 +117,7 @@ export default function GameScreen() {
   // whole board mid-rally. roundSettings is frozen for the entire round (see
   // useGameSettings.tsx's own activeRoundSettings doc), so this engages the instant this screen
   // mounts — well before any actual tilt-steering begins — and never toggles again mid-round.
-  const { orientationMode, upsideDown } = useAccelerometerOrientation(roundSettings.lockOrientation || tiltControlActive)
+  const { orientationMode, upsideDown } = useOrientationState(roundSettings.lockOrientation || tiltControlActive)
   // vsCpu always seats the sole human at player 1 (see humanPlayersFor) — pin them to the visual
   // bottom of a portrait/faceToFace hold, the natural single-hand grip, rather than the ±90/
   // upsideDown pairing above. That pairing is tuned for two-player pass-and-play, where either seat
@@ -130,7 +130,7 @@ export default function GameScreen() {
   const { width, height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
   // Remaps insets onto the correct visual edge for the board's own rotated container — see
-  // rotateInsets' own doc comment in @tastic/split-screen. Applied wherever this screen's floating
+  // rotateInsets' own doc comment in @tastic/core. Applied wherever this screen's floating
   // UI needs to reason about the board's own (possibly rotated) edges, via computeBoardLayout below
   // (board.x/y/width/height end up correctly inset once, not the real screen's raw insets).
   const rotatedInsets = useMemo(() => rotateInsets(insets, rotation), [insets, rotation])
@@ -151,6 +151,18 @@ export default function GameScreen() {
 
   const { state, setPaddleTarget, resetGame } = useGameState(board, scoreToWin, ballSpeed, roundSettings.gameMode, roundSettings.bricksEnabled, paused)
   const { phase, ball, paddles, scores, bounceCount, bricks, lives } = state
+
+  // Mirrors "an actual live rally, not paused" up to useGameSettings.tsx's own useEdgeGestureGuard
+  // call rather than calling that hook directly here: it stays mounted once at the provider (same
+  // as every other cross-cutting settings concern in this app), and this is just the one signal it
+  // has no other way to read. Unlocked between points (idle/pointScored/gameOver) and whenever a
+  // dialog is open (paused) — back/settings stay unconditionally visible here (unlike Snake/
+  // LightCycles), so there's no button-visibility signal to key off instead. Reset to false on
+  // unmount too, so leaving this screen mid-rally by any path can't leave Edge Guard stuck on.
+  useEffect(() => {
+    setIsActivelyPlaying(phase === 'live' && !paused)
+    return () => setIsActivelyPlaying(false)
+  }, [phase, paused, setIsActivelyPlaying])
 
   useAIOpponent(state, board, aiPlayer, aiDifficulty, paused, setPaddleTarget)
 
@@ -298,7 +310,7 @@ export default function GameScreen() {
           (the pre-swap dimensions — since a 90°/-90° rotation swaps which screen dimension is "width"
           vs "height" for this box's own layout, it has to be laid out BEFORE the transform using
           whichever pairing was fed into computeBoardLayout above) and centered on the real screen
-          exactly the way @tastic/split-screen's own FakeLandscapeView centers its rotated content. */}
+          exactly the way @tastic/core's own FakeLandscapeView centers its rotated content. */}
       <View
         style={[
           styles.localContainer,
@@ -392,7 +404,7 @@ export default function GameScreen() {
               <Button mode='contained' onPress={() => resetGame(board)} style={styles.overlayButton} buttonColor={playerColor[1]} textColor={playerOnColor[1]}>
                 Play Again
               </Button>
-              <Button mode='contained' onPress={() => router.back()} style={styles.overlayButton} buttonColor={playerColor[1]} textColor={playerOnColor[1]}>
+              <Button mode='contained' onPress={safeBack} style={styles.overlayButton} buttonColor={playerColor[1]} textColor={playerOnColor[1]}>
                 Loadout
               </Button>
             </View>
@@ -424,7 +436,7 @@ export default function GameScreen() {
               <Button mode='contained' onPress={() => resetGame(board)} style={styles.overlayButton} buttonColor={playerColor[loser]} textColor={playerOnColor[loser]}>
                 Play Again
               </Button>
-              <Button mode='contained' onPress={() => router.back()} style={styles.overlayButton} buttonColor={playerColor[winner]} textColor={playerOnColor[winner]}>
+              <Button mode='contained' onPress={safeBack} style={styles.overlayButton} buttonColor={playerColor[winner]} textColor={playerOnColor[winner]}>
                 Loadout
               </Button>
             </View>

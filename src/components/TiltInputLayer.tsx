@@ -15,7 +15,7 @@ export interface TiltInputLayerProps {
   // trigger — see the phase effect below.
   phase: GamePhase
   // Frozen for the whole round whenever tilt is active — see game.tsx's own
-  // useAccelerometerOrientation(locked) call, which forces this never to change mid-round once
+  // useOrientationState(locked) call, which forces this never to change mid-round once
   // tilt control is on, so this component never has to react to it changing.
   rotation: 0 | 90 | -90
   board: BoardLayout

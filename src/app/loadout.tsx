@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { defaultColors, getThirdColor, useAutoPaperTheme, useThemeSettings } from '@rific/auto-paper'
+import { FakeLandscapeView, getViewRotation, rotateInsets, useOrientationState } from '@tastic/core'
 import { CornerActionButtons, MenuOption, PressAwayOverlay, ReadyButton, SharedActionBand, usePopoverHost } from '@tastic/hud'
-import { DualZoneLayout, FakeLandscapeView, getViewRotation, needsSharedNeutralZone, rotateInsets, useAccelerometerOrientation, useDualZoneLayout } from '@tastic/split-screen'
+import { DualZoneLayout, needsSharedNeutralZone, useDualZoneLayout } from '@tastic/split-screen'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, StyleSheet, View } from 'react-native'
@@ -103,15 +104,15 @@ export default function LoadoutScreen() {
   // gets committed once Ready is pressed, mirroring Snake's identical routeMode/finalMode split.
   const finalMode: GameMode = gameMode === 'vsCpu' && difficulty === 'none' ? 'solo' : gameMode
   const { profiles, lastSelected, selectProfile } = useProfiles()
-  // orientationMode just follows the device's current physical tilt (see useAccelerometerOrientation),
+  // orientationMode just follows the device's current physical tilt (see useOrientationState),
   // CPU games included — how you're holding the phone right now decides the panel arrangement, not
   // a stored per-round choice. This is what lets two players sit shoulder-to-shoulder and pick a
   // color at the same time once the phone is turned sideways, instead of a portrait-narrow column —
   // and for vs-CPU, it's simply whichever way the solo player is holding it. Lock Orientation (see
   // SettingsDialog) is the opt-in for pinning it. app.json is portrait-locked at the OS level now
-  // (no more real OS rotation to rely on — see @tastic/split-screen's FakeLandscapeView below,
+  // (no more real OS rotation to rely on — see @tastic/core's FakeLandscapeView below,
   // which fakes the rest entirely in JS from this hook's live accelerometer reading).
-  const { orientationMode, p1OnRight, upsideDown, resolved: p1OnRightResolved } = useAccelerometerOrientation(settings.lockOrientation)
+  const { orientationMode, p1OnRight, upsideDown, resolved: p1OnRightResolved } = useOrientationState(settings.lockOrientation)
 
   // The panel area's own layout (which branch renders, which side each panel is on) lags one fade
   // behind the live orientationMode/p1OnRight/upsideDown above — see useDualZoneLayout's own
@@ -347,9 +348,6 @@ export default function LoadoutScreen() {
       scoreToWin={settings.scoreToWin}
       scoreToWinOptions={SCORE_TO_WIN_OPTIONS}
       onScoreToWinChange={(value) => setSettings({ scoreToWin: value })}
-      aiDifficulty={gameMode === 'vsCpu' ? difficulty : undefined}
-      aiDifficultyOptions={gameMode === 'vsCpu' ? AI_DIFFICULTY_OPTIONS : undefined}
-      onAiDifficultyChange={gameMode === 'vsCpu' ? handleDifficultyChange : undefined}
       // Hidden once solo is selected — bricks become mandatory there (see bricksActiveFor), so a
       // visible "off" toggle would be actively misleading.
       bricksEnabled={finalMode !== 'solo' ? settings.bricksEnabled : undefined}
@@ -424,6 +422,9 @@ export default function LoadoutScreen() {
       takenColor={p1Color}
       allowSwapTaken={gameMode === 'vsCpu'}
       isHuman={p2IsHuman}
+      cpuDifficulty={p2IsHuman ? undefined : difficulty}
+      cpuDifficultyOptions={p2IsHuman ? undefined : AI_DIFFICULTY_OPTIONS}
+      onCpuDifficultyChange={p2IsHuman ? undefined : handleDifficultyChange}
       controlScheme={p2IsHuman ? settings.controlScheme[2] : undefined}
       onControlSchemeChange={p2IsHuman ? (scheme) => setSettings({ controlScheme: { ...settings.controlScheme, 2: scheme } }) : undefined}
       controlSchemeOptions={p2IsHuman ? CONTROL_SCHEME_OPTIONS : undefined}
@@ -450,7 +451,7 @@ export default function LoadoutScreen() {
   return (
     <View style={[styles.container, { backgroundColor: bg }]}>
       {/* Everything below reads correctly no matter which way the phone is actually being held —
-      see @tastic/split-screen's FakeLandscapeView for why this is needed at all now that the app is
+      see @tastic/core's FakeLandscapeView for why this is needed at all now that the app is
       portrait-locked at the OS level (no more real OS rotation to rely on). Driven by panelLayout
       (the same committed, already-fade-masked state DualZoneLayout itself renders from), not the
       live orientationMode/p1OnRight/upsideDown above, so the visual rotation change and the panel
