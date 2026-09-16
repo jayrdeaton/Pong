@@ -1,5 +1,15 @@
 import { BallSpeedLevel, PaddleSizeLevel } from '@/types'
 
+// Default P1/P2 seat colors — used both as the `theme` Redux slice's initial triad and the
+// seatColors slice's own "nothing remembered yet" fallback (see redux/store.ts and
+// redux/seatColorsSlice.ts). Live here, a plain constants file with no Redux/component
+// dependencies of its own, rather than on Theme.tsx (where they used to live before that component
+// itself started reading from the store) — store.ts needs them to seed the theme reducer, and a
+// redux/ file importing from components/ would both invert the natural dependency direction and
+// risk a real cycle back through Theme.tsx's own RootState import.
+export const DEFAULT_P1_COLOR = '#f44336'
+export const DEFAULT_P2_COLOR = '#2196f3'
+
 export const WALL_THICKNESS = 10
 
 // width:height for the outer letterboxed container on desktop web only — a much wider, shallower

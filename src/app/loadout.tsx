@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { defaultColors, getThirdColor, useAutoPaperTheme, useThemeSettings } from '@rific/auto-paper'
 import { FakeLandscapeView, getViewRotation, rotateInsets, useOrientationState } from '@tastic/core'
 import { CornerActionButtons, MenuOption, PressAwayOverlay, ReadyButton, SharedActionBand, usePopoverHost } from '@tastic/hud'
@@ -8,13 +7,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, StyleSheet, View } from 'react-native'
 import Animated from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useDispatch, useSelector } from 'react-redux'
 
 import { LOADOUT_SHARED_CONTROLS_IDS, LoadoutSharedControls } from '@/components/LoadoutSharedControls'
 import { PlayerSetupPanel } from '@/components/PlayerSetupPanel'
 import { SettingsDialog } from '@/components/SettingsDialog'
-import { CPU_COLOR_STORAGE_KEY, DEFAULT_P1_COLOR, DEFAULT_P2_COLOR, isValidHex, PLAYER_COLORS_STORAGE_KEY } from '@/components/Theme'
 import { useGameSettings } from '@/hooks/useGameSettings'
 import { useProfiles } from '@/hooks/useProfiles'
+import { seatColorsActions } from '@/redux/seatColorsSlice'
+import type { RootState } from '@/redux/store'
 import { BallSpeedLevel, ControlScheme, GameMode, PaddleSizeLevel, Player } from '@/types'
 import { AIDifficultyChoice } from '@/utils/aiOpponent'
 import { humanPlayersFor, parseGameMode } from '@/utils/gameMode'
@@ -141,50 +142,29 @@ export default function LoadoutScreen() {
   const p1Profile = profiles.find((p) => p.id === lastSelected[1]) ?? null
   const p2Profile = p2IsHuman ? (profiles.find((p) => p.id === lastSelected[2]) ?? null) : null
 
-  // Guest and CPU each remember their own last color independently (PLAYER_COLORS_STORAGE_KEY vs.
-  // CPU_COLOR_STORAGE_KEY — see Theme.tsx) instead of fighting over one slot, and neither slot is
-  // ever written from a profile-derived color (see p1Profile/p2Profile above). Seeded from the live
-  // theme (already loaded by Theme.tsx's own cold-boot read of this same guest key, by the time this
-  // screen ever mounts) rather than the DEFAULT_P* constants directly, so a guest seat's very first
-  // render already agrees with itself instead of flashing a default for the one read below to fix.
-  const [guestColors, setGuestColors] = useState<{ p1: string; p2: string }>(() => ({ p1: themeColors.primary, p2: themeColors.secondary }))
-  const [cpuColor, setCpuColor] = useState(() => themeColors.secondary)
+  const dispatch = useDispatch()
+  // Guest and CPU each remember their own last color independently (Redux's seatColors slice — see
+  // redux/seatColorsSlice.ts and store.ts) instead of fighting over one slot, and neither slot is
+  // ever written from a profile-derived color (see p1Profile/p2Profile above). Providers.tsx's
+  // PersistGate already blocks this whole screen from mounting until redux-persist has rehydrated,
+  // so — unlike the old AsyncStorage version's own cold-boot read — there's no load to race here:
+  // guestColors/cpuColor are already resolved, real values (persisted, or the slice's own defaults)
+  // from this screen's very first render.
+  const guestColors = useSelector((state: RootState) => state.seatColors.lastGuestColor)
+  const cpuColor = useSelector((state: RootState) => state.seatColors.lastCpuColor)
 
-  useEffect(() => {
-    let cancelled = false
-    Promise.all([AsyncStorage.getItem(PLAYER_COLORS_STORAGE_KEY), AsyncStorage.getItem(CPU_COLOR_STORAGE_KEY)]).then(([storedGuest, storedCpu]) => {
-      if (cancelled) return
-      // Resolved definitively either way (never left at the lazy live-theme seed above) — a slot
-      // that's never been written to falls back to this app's own defaults here, same as a fresh
-      // install already behaves, rather than keeping whatever the seed above happened to guess.
-      let nextGuest = { p1: DEFAULT_P1_COLOR, p2: DEFAULT_P2_COLOR }
-      if (storedGuest) {
-        try {
-          const parsed = JSON.parse(storedGuest)
-          nextGuest = { p1: isValidHex(parsed.p1) ? parsed.p1 : DEFAULT_P1_COLOR, p2: isValidHex(parsed.p2) ? parsed.p2 : DEFAULT_P2_COLOR }
-        } catch {
-          // Corrupt/stale blob — fall back to defaults above.
-        }
-      }
-      setGuestColors(nextGuest)
-      setCpuColor(isValidHex(storedCpu) ? storedCpu : DEFAULT_P2_COLOR)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const persistGuestColor = useCallback((seat: Player, hex: string) => {
-    setGuestColors((prev) => {
-      const next = { ...prev, [seat === 1 ? 'p1' : 'p2']: hex }
-      AsyncStorage.setItem(PLAYER_COLORS_STORAGE_KEY, JSON.stringify(next)).catch(() => {})
-      return next
-    })
-  }, [])
-  const persistCpuColor = useCallback((hex: string) => {
-    setCpuColor(hex)
-    AsyncStorage.setItem(CPU_COLOR_STORAGE_KEY, hex).catch(() => {})
-  }, [])
+  const persistGuestColor = useCallback(
+    (seat: Player, hex: string) => {
+      dispatch(seatColorsActions.setLastGuestColor({ seat, color: hex }))
+    },
+    [dispatch]
+  )
+  const persistCpuColor = useCallback(
+    (hex: string) => {
+      dispatch(seatColorsActions.setLastCpuColor(hex))
+    },
+    [dispatch]
+  )
 
   // Picking the other slot's exact current color swaps the two instead of no-op'ing — only
   // reachable at all when that slot's own picker allowed it (allowSwapTaken: vs-CPU only, where
@@ -267,8 +247,8 @@ export default function LoadoutScreen() {
       const latestProfiles = profilesRef.current
       const nextP1Profile = latestProfiles.find((p) => p.id === p1SelectedId) ?? null
       const nextP2Profile = p2IsHuman ? (latestProfiles.find((p) => p.id === p2SelectedId) ?? null) : null
-      const nextP1 = nextP1Profile ? nextP1Profile.color : guestColorsRef.current.p1
-      const nextP2 = !p2IsHuman ? cpuColorRef.current : nextP2Profile ? nextP2Profile.color : guestColorsRef.current.p2
+      const nextP1 = nextP1Profile ? nextP1Profile.color : guestColorsRef.current[1]
+      const nextP2 = !p2IsHuman ? cpuColorRef.current : nextP2Profile ? nextP2Profile.color : guestColorsRef.current[2]
       setThemeColor({ color: { primary: nextP1, secondary: nextP2, tertiary: getThirdColor(nextP1, nextP2) } })
     }, [p1SelectedId, p2SelectedId, p2IsHuman, setThemeColor])
   )
@@ -407,7 +387,7 @@ export default function LoadoutScreen() {
       guestLabel='P1'
       onProfileSelect={(profile) => {
         selectProfile(1, profile?.id ?? null)
-        applySeatColor(1, profile ? profile.color : guestColors.p1)
+        applySeatColor(1, profile ? profile.color : guestColors[1])
       }}
       onManageProfiles={() => router.push('/profiles')}
     />
@@ -441,7 +421,7 @@ export default function LoadoutScreen() {
         p2IsHuman
           ? (profile) => {
               selectProfile(2, profile?.id ?? null)
-              applySeatColor(2, profile ? profile.color : guestColors.p2)
+              applySeatColor(2, profile ? profile.color : guestColors[2])
             }
           : undefined
       }
