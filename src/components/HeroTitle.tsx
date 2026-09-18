@@ -1,3 +1,4 @@
+import { getStaggeredWordDuration, StaggeredWord } from '@tastic/hud'
 import { useEffect } from 'react'
 import { StyleSheet, View } from 'react-native'
 import Animated, { Easing, interpolate, useAnimatedStyle, useReducedMotion, useSharedValue, withDelay, withRepeat, withSequence, withTiming } from 'react-native-reanimated'
@@ -13,11 +14,8 @@ export interface HeroTitleProps {
 }
 
 const WORD = 'PONG'
-const TOTAL_LETTERS = WORD.length
 
-const STAGGER_MS = 45
-const LETTER_DURATION_MS = 320
-const TOTAL_STAGGER_MS = (TOTAL_LETTERS - 1) * STAGGER_MS + LETTER_DURATION_MS
+const TOTAL_STAGGER_MS = getStaggeredWordDuration(WORD.length)
 
 // The paddles (and the ball they volley) stay hidden until the wordmark has mostly landed — one
 // "power on" beat once the letters settle, rather than motion competing with letters still flying
@@ -35,37 +33,6 @@ const PADDLE_RADIUS = 3
 const BALL_SIZE = 10
 const TRACK_WIDTH = 60
 const HALF_TRAVEL = (TRACK_WIDTH - BALL_SIZE) / 2
-
-function AnimatedLetter({ char, index, color, reducedMotion }: { char: string; index: number; color: string; reducedMotion: boolean }) {
-  const progress = useSharedValue(reducedMotion ? 1 : 0)
-
-  useEffect(() => {
-    if (reducedMotion) return
-    progress.value = withDelay(index * STAGGER_MS, withTiming(1, { duration: LETTER_DURATION_MS, easing: Easing.out(Easing.back(1.5)) }))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reducedMotion])
-
-  const style = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    transform: [{ translateY: (1 - progress.value) * 12 }, { scale: 0.85 + progress.value * 0.15 }]
-  }))
-
-  return (
-    <Animated.Text allowFontScaling={false} style={[styles.letter, { color }, style]}>
-      {char}
-    </Animated.Text>
-  )
-}
-
-function Word({ text, startIndex, color, reducedMotion }: { text: string; startIndex: number; color: string; reducedMotion: boolean }) {
-  return (
-    <View style={styles.word}>
-      {text.split('').map((char, i) => (
-        <AnimatedLetter key={i} char={char} index={startIndex + i} color={color} reducedMotion={reducedMotion} />
-      ))}
-    </View>
-  )
-}
 
 // Bespoke hero for this game: a staggered word, then two paddles fade in and volley the ball back
 // and forth forever — styled after the real in-game paddles/ball (see Board.tsx) so the rally reads
@@ -102,7 +69,7 @@ export function HeroTitle({ color, p1Color, p2Color }: HeroTitleProps) {
 
   return (
     <View style={styles.wrapper}>
-      <Word text={WORD} startIndex={0} color={color} reducedMotion={reducedMotion} />
+      <StaggeredWord word={WORD} startIndex={0} color={color} reducedMotion={reducedMotion} fontFamily={MONO_FONT} fontSize={40} lineHeight={48} letterSpacing={4} />
 
       <Animated.View style={[styles.lineRow, entranceStyle]}>
         <Animated.View style={[styles.paddle, { backgroundColor: p1Color }, leftPaddleStyle]} />
@@ -123,13 +90,6 @@ const styles = StyleSheet.create({
     height: BALL_SIZE,
     width: BALL_SIZE
   },
-  letter: {
-    fontFamily: MONO_FONT,
-    fontSize: 40,
-    fontWeight: 'bold',
-    letterSpacing: 4,
-    lineHeight: 48
-  },
   lineRow: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -146,9 +106,6 @@ const styles = StyleSheet.create({
     height: PADDLE_HEIGHT,
     justifyContent: 'center',
     width: TRACK_WIDTH
-  },
-  word: {
-    flexDirection: 'row'
   },
   wrapper: {
     alignItems: 'center'

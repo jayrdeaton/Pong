@@ -1,4 +1,4 @@
-import { Provider as AutoPaperProvider, themeActions, type ThemeSettings } from '@rific/auto-paper'
+import { Provider as AutoPaperProvider, themeActions, type ThemeSettings, useThemeBridgeProps } from '@rific/auto-paper'
 import * as SplashScreen from 'expo-splash-screen'
 import { ReactNode, useCallback } from 'react'
 import { shallowEqual, useDispatch, useSelector } from 'react-redux'
@@ -34,10 +34,7 @@ export function Theme({ children }: Props) {
   // nothing left here to gate mounting on the way the old `settings !== null` AsyncStorage read did;
   // this only marks auto-paper's own Provider as internally ready.
   const onReady = useCallback(() => markSplashReady('theme'), [])
+  const bridgeProps = useThemeBridgeProps({ initialValue: settings, onChange, onReady })
 
-  return (
-    <AutoPaperProvider initialValue={settings} onChange={onChange} onReady={onReady}>
-      {children}
-    </AutoPaperProvider>
-  )
+  return <AutoPaperProvider {...bridgeProps}>{children}</AutoPaperProvider>
 }

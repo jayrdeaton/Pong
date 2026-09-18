@@ -1,4 +1,4 @@
-import { useToast } from '@rific/toaster'
+import { useUpdateErrorToast } from '@rific/toaster'
 import type { ViewRotation } from '@tastic/core'
 import { BaseSettingsDialog } from '@tastic/hud'
 
@@ -22,6 +22,6 @@ export interface SettingsDialogProps {
 // three call sites (index.tsx, loadout.tsx, game.tsx) needed to change.
 export function SettingsDialog({ visible, onDismiss, rotation = 0 }: SettingsDialogProps) {
   const { settings, setSettings } = useGameSettings()
-  const { error } = useToast()
-  return <BaseSettingsDialog visible={visible} onDismiss={onDismiss} rotation={rotation} version={release.otaVersion} lockOrientation={settings.lockOrientation} onLockOrientationChange={(value) => setSettings({ lockOrientation: value })} deferBottomEdgeGestures={settings.deferBottomEdgeGestures} onDeferBottomEdgeGestures={(value) => setSettings({ deferBottomEdgeGestures: value })} onUpdateError={(message) => error('Update check failed', message)} />
+  const onUpdateError = useUpdateErrorToast()
+  return <BaseSettingsDialog visible={visible} onDismiss={onDismiss} rotation={rotation} version={release.otaVersion} lockOrientation={settings.lockOrientation} onLockOrientationChange={(value) => setSettings({ lockOrientation: value })} deferBottomEdgeGestures={settings.deferBottomEdgeGestures} onDeferBottomEdgeGestures={(value) => setSettings({ deferBottomEdgeGestures: value })} onUpdateError={onUpdateError} />
 }

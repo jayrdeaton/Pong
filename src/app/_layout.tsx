@@ -1,9 +1,9 @@
+import { useAutoPaperTheme } from '@rific/auto-paper'
 import { Toaster, ToastProvider } from '@rific/toaster'
-import { getViewRotation, OrientationProvider, useOrientationState } from '@tastic/core'
+import { OrientationProvider, RotationAwareStatusBar, SettingsAndProfilesGate, useThemedRootBackground } from '@tastic/core'
 import * as Haptics from 'expo-haptics'
 import { Stack } from 'expo-router'
 import { DeviceMotion } from 'expo-sensors'
-import { StatusBar } from 'expo-status-bar'
 import { ReactNode } from 'react'
 import { StyleSheet } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -19,49 +19,75 @@ import { GameStatsProvider } from '@/hooks/useGameStats'
 import { ProfilesProvider, useProfiles } from '@/hooks/useProfiles'
 import { SplashGate } from '@/utils/splashGate'
 
-// Holds GameSettingsProvider's own children back until its 'settings' splash gate reports ready
-// (see useGameSettings.tsx's own `loaded` field) — so nothing further down the tree can ever mount
-// and read a still-loading/default settings value. Wrapped INSIDE GameSettingsProvider's own
-// position in the tree (i.e. as its children, not as its parent) so GameSettingsProvider itself
-// still mounts immediately and its AsyncStorage read starts right away — wrapping it from the
-// outside instead would deadlock, since `loaded` could then never become true. See loadout.tsx's
-// own route-param workaround for the bug this used to cause before this gate existed.
-function SettingsGate({ children }: { children: ReactNode }) {
-  const { loaded } = useGameSettings()
+// Sits below both GameSettingsProvider and ProfilesProvider (so it can call their own hooks) and
+// above everything that actually reads them — index.tsx reads settings.lockOrientation immediately
+// on mount, and /loadout reads profiles/lastSelected immediately too, so without this both would
+// briefly render on DEFAULT_SETTINGS/an empty roster before popping to the real persisted values a
+// moment after the splash lifts. GameSettingsProvider/ProfilesProvider themselves are deliberately
+// NOT gated/delayed — both still mount immediately, right alongside GameStatsProvider, so all three
+// providers' own AsyncStorage reads keep starting in parallel exactly as before (this used to fully
+// serialize: GameSettingsProvider's own SettingsGate wrapped ProfilesProvider directly, and
+// ProfilesProvider's own ProfilesGate wrapped GameStatsProvider too, so GameStatsProvider's own
+// AsyncStorage load didn't even start until both settings and profiles had resolved); only what's
+// below this component ever calls useGameSettings()/useProfiles() and had anything to gain by
+// waiting. Safe to gate on each provider's own `loaded` from down here rather than needing to delay
+// the providers' own mount (contrast Theme.tsx's AutoPaperProvider, which genuinely can't be patched
+// after mount) because neither hook's state is seeded via a lazy useState(() => ...) initializer —
+// both start at hardcoded defaults and correct themselves via a normal setState once their load
+// effect resolves, so by the time `loaded` flips true here the context value already reflects it.
+// Matches BoxHockey's own GatedApp (see BoxHockey/src/app/_layout.tsx).
+function GatedApp({ children }: { children: ReactNode }) {
+  const { loaded: settingsLoaded } = useGameSettings()
+  const { loaded: profilesLoaded } = useProfiles()
   return (
-    <SplashGate gate='settings' ready={loaded}>
+    <SettingsAndProfilesGate Gate={SplashGate} settingsLoaded={settingsLoaded} profilesLoaded={profilesLoaded}>
       {children}
-    </SplashGate>
+    </SettingsAndProfilesGate>
   )
 }
 
-// Same reasoning as SettingsGate above, for the profiles roster (see useProfiles.tsx's own `loaded`
-// field, which only flips true once both the local AsyncStorage read AND, when available, the
-// shared-store read have resolved).
-function ProfilesGate({ children }: { children: ReactNode }) {
-  const { loaded } = useProfiles()
+// Reads @rific/auto-paper's own live `dark` (not settings — this app's theme and its game settings
+// are two independent concerns) to keep the root window background and the Stack's own per-screen
+// contentStyle both tracking theme changes after mount too (see useThemedRootBackground's own doc for
+// why both are needed and why the corner-flash fix lives there instead of here). Kept a sibling of
+// AppContent, not folded into it, so a live theme flip doesn't have to re-render OrientationProvider/
+// ToastProvider's own subtree, and vice versa.
+function AppStack() {
+  const { dark } = useAutoPaperTheme()
+  return <Stack screenOptions={useThemedRootBackground(dark, false)} />
+}
+
+// RootLayout itself sits ABOVE GameSettingsProvider (it's the one that renders it), so it can't call
+// useGameSettings() to read settings.lockOrientation for <RotationAwareStatusBar>'s own `locked`
+// prop. This component exists purely to sit far enough down the tree to read it — same role the old
+// local AppRotationAwareStatusBar function used to serve — while otherwise rendering exactly the
+// same JSX RootLayout used to inline directly.
+function AppContent() {
+  const { settings } = useGameSettings()
   return (
-    <SplashGate gate='profiles' ready={loaded}>
-      {children}
-    </SplashGate>
+    // deviceMotion is the app's own real expo-sensors import, injected rather than imported by
+    // @tastic/core itself — see that package's own doc for why.
+    <OrientationProvider deviceMotion={DeviceMotion}>
+      <ToastProvider haptics={Haptics} paper={RNPaper}>
+        <AppStack />
+        {/* historyButton/clearButton off — this app has no history modal use case for them to open,
+        and a stray control row above the toast stack for a feature that goes nowhere is worse than
+        just not offering it. limit is already the package's own default (3); pinned explicitly so
+        it stays 3 regardless of what that default does in a future toaster version. */}
+        <Toaster historyButton={null} clearButton={null} limit={3} />
+        <UpdateDialog />
+        {/* @tastic/core's RotationAwareStatusBar, with this app's own settings.lockOrientation
+        threaded through (see that component's own doc for why locked must match whatever a screen's
+        own useOrientationState(lockOrientation) call uses) — matches AirHockey's/BoxHockey's/
+        LightCycles'/Snake's identical usage. /game additionally hides it unconditionally regardless
+        (see its own <StatusBar hidden />), so this only actually matters on /index, /loadout,
+        /profiles. */}
+        <RotationAwareStatusBar locked={settings.lockOrientation} />
+      </ToastProvider>
+    </OrientationProvider>
   )
 }
 
-// Hides the OS status bar whenever content elsewhere is visually rotated (see
-// @tastic/core's FakeLandscapeView) — matches AirHockey's/BoxHockey's/LightCycles'/Snake's
-// identical RotationAwareStatusBar. /game additionally hides it unconditionally regardless (see
-// its own <StatusBar hidden />), so this only actually matters on /index, /loadout, /profiles.
-function RotationAwareStatusBar() {
-  const { orientationMode, p1OnRight, upsideDown } = useOrientationState()
-  const rotation = getViewRotation(orientationMode, p1OnRight, upsideDown)
-  return <StatusBar hidden={rotation !== 0} />
-}
-
-// OrientationProvider/ProfilesProvider mounted at the same nesting position BoxHockey
-// uses (see BoxHockey/src/app/_layout.tsx): both inside GameSettingsProvider (game.tsx's
-// useOrientationState call needs settings.lockOrientation to be available, though neither
-// provider actually depends on settings — this just mirrors the established nesting order), outside
-// ToastProvider.
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
@@ -70,24 +96,13 @@ export default function RootLayout() {
           <Providers>
             <Theme>
               <GameSettingsProvider>
-                <SettingsGate>
-                  <ProfilesProvider>
-                    <ProfilesGate>
-                      <GameStatsProvider>
-                        {/* deviceMotion is the app's own real expo-sensors import, injected rather than
-                        imported by @tastic/core itself — see that package's own doc for why. */}
-                        <OrientationProvider deviceMotion={DeviceMotion}>
-                          <ToastProvider haptics={Haptics} paper={RNPaper}>
-                            <Stack screenOptions={{ headerShown: false, gestureEnabled: false }} />
-                            <Toaster />
-                            <UpdateDialog />
-                            <RotationAwareStatusBar />
-                          </ToastProvider>
-                        </OrientationProvider>
-                      </GameStatsProvider>
-                    </ProfilesGate>
-                  </ProfilesProvider>
-                </SettingsGate>
+                <ProfilesProvider>
+                  <GameStatsProvider>
+                    <GatedApp>
+                      <AppContent />
+                    </GatedApp>
+                  </GameStatsProvider>
+                </ProfilesProvider>
               </GameSettingsProvider>
             </Theme>
           </Providers>

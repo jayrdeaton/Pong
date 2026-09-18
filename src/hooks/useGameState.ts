@@ -228,8 +228,15 @@ export function useGameState(board: BoardLayout, scoreToWin: number, ballSpeedLe
   // latest settings-derived reducer, without needing to recreate useReducer itself (which would
   // reset `state` back to its initializer whenever scoreToWin/ballSpeedLevel changed).
   const reducerRef = useRef(makeReducer(scoreToWin, ballSpeedLevel, mode, bricksEnabled))
-  // eslint-disable-next-line react-hooks/refs -- see comment above
-  reducerRef.current = makeReducer(scoreToWin, ballSpeedLevel, mode, bricksEnabled)
+  // An effect (no dependency array, so it reruns after every render) rather than a bare
+  // `.current =` assignment in the component body — matching BoxHockey's own identical reducerRef
+  // in its useGameState.ts: React may render a component more than once for a single commit (e.g.
+  // under StrictMode or a Suspense retry) without every one of those renders actually reaching the
+  // device, so a bare render-time write here could mirror in a stale/discarded reducer; an effect
+  // only fires once per real commit.
+  useEffect(() => {
+    reducerRef.current = makeReducer(scoreToWin, ballSpeedLevel, mode, bricksEnabled)
+  })
 
   const bricksActive = bricksActiveFor(mode, bricksEnabled)
   const [state, dispatch] = useReducer(
@@ -242,8 +249,13 @@ export function useGameState(board: BoardLayout, scoreToWin: number, ballSpeedLe
   )
 
   const boardRef = useRef(board)
-  // eslint-disable-next-line react-hooks/refs -- mirrored every render so the physics rAF loop below always reads the current board layout without needing it in that effect's own deps
-  boardRef.current = board
+  // Mirrored every render so the physics rAF loop below always reads the current board layout
+  // without needing it in that effect's own deps — an effect (no dependency array) rather than a
+  // bare render-time assignment, same reasoning as reducerRef's own comment above and matching
+  // BoxHockey's identical boardRef.
+  useEffect(() => {
+    boardRef.current = board
+  })
 
   // Raw, unthrottled paddle target Ys — written every touch sample (TouchInputLayer) or AI
   // decision (useAIOpponent) via setPaddleTarget below, WITHOUT dispatching (a dispatch per touch

@@ -5,7 +5,6 @@ import { useDispatch, useSelector } from 'react-redux'
 import { profileSelectionActions } from '@/redux/profileSelectionSlice'
 import { type AppDispatch, type RootState } from '@/redux/store'
 import { Player } from '@/types'
-import { useSplashReady } from '@/utils/splashGate'
 
 // Same group id BoxHockey and LightCycles both declare in app.json's ios.entitlements (and any
 // future @tastic game that wants into the same shared roster) — see @tastic/profile's own README
@@ -22,10 +21,9 @@ interface ProfilesContextValue {
   deleteProfile: (id: string) => void
   selectProfile: (seat: Player, profileId: string | null) => void
   // True once the one-time initial reconciliation below (redux-persist's own already-rehydrated
-  // `profiles` against the shared App Group store) has completed. Reported to the 'profiles' splash
-  // gate via useSplashReady below, and (separately) read by _layout.tsx's own ProfilesGate, which
-  // holds its children back until this flips true — see that file's own doc for the
-  // settings-then-profiles serial gating order this app uses.
+  // `profiles` against the shared App Group store) has completed. Read by _layout.tsx's own
+  // SettingsAndProfilesGate, which holds its children back until this flips true — see that
+  // file's own doc for the settings-then-profiles serial gating order this app uses.
   loaded: boolean
 }
 
@@ -72,8 +70,6 @@ export function ProfilesProvider({ children }: Props) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  useSplashReady('profiles', loaded)
 
   // Mirrors local writes out to the shared store (syncToShared, called from each CRUD function
   // below) and picks up remote writes a sibling @tastic app made while this one was backgrounded
