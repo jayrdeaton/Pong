@@ -555,7 +555,7 @@ export default function LoadoutScreen() {
         )}
       </FakeLandscapeView>
 
-      <SettingsDialog visible={settingsOpen} onDismiss={() => setSettingsOpen(false)} rotation={rotation} />
+      <SettingsDialog visible={settingsOpen} onDismiss={() => setSettingsOpen(false)} rotation={rotation} showHowToPlay />
     </View>
   )
 }

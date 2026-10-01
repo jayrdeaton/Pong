@@ -11,6 +11,7 @@ import * as RNPaper from 'react-native-paper'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 
 import { Fonts } from '@/components/Fonts'
+import { GuideHost } from '@/components/GuideHost'
 import { Providers } from '@/components/Providers'
 import { Theme } from '@/components/Theme'
 import { UpdateDialog } from '@/components/UpdateDialog'
@@ -69,7 +70,15 @@ function AppContent() {
     // @tastic/core itself — see that package's own doc for why.
     <OrientationProvider deviceMotion={DeviceMotion}>
       <ToastProvider haptics={Haptics} paper={RNPaper}>
-        <AppStack />
+        {/* Wraps the stack (rather than sitting beside it like UpdateDialog) because Home's
+        useAutoShowGuide() and the Home/loadout Settings dialogs' "How to Play" row reach it through
+        context (see GuideHost's own doc). Must stay inside OrientationProvider (it reads the live
+        tilt), Theme (the card renders through a Paper Portal), Providers' PersistGate (the "seen"
+        version has to be rehydrated before Home asks to auto-show) and GatedApp (it reads the loaded
+        settings: lockOrientation, controlScheme, scoreToWin). */}
+        <GuideHost>
+          <AppStack />
+        </GuideHost>
         {/* historyButton/clearButton off — this app has no history modal use case for them to open,
         and a stray control row above the toast stack for a feature that goes nowhere is worse than
         just not offering it. limit is already the package's own default (3); pinned explicitly so

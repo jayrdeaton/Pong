@@ -2,11 +2,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import { combineReducers, configureStore, type Middleware } from '@reduxjs/toolkit'
 import { createThemeReducer, getThirdColor } from '@rific/auto-paper'
 import { defaultSoundSettings, hapticReducer, soundReducer, type SoundSettings } from '@rific/feedback-press'
+import { createReturningPlayerMigrate } from '@tastic/hud/guide'
 import { profilesReducer } from '@tastic/profile'
 import { FLUSH, PAUSE, PERSIST, persistReducer, persistStore, PURGE, REGISTER, REHYDRATE } from 'redux-persist'
 
 import { DEFAULT_P1_COLOR, DEFAULT_P2_COLOR } from '@/constants/game'
 
+import guide, { LEGACY_STORAGE_KEYS } from './guideSlice'
 import profileSelection from './profileSelectionSlice'
 import seatColors from './seatColorsSlice'
 
@@ -50,7 +52,13 @@ const rootReducer = combineReducers({
   // available, with no separate hand-rolled AsyncStorage path needed for that case.
   profiles: profilesReducer,
   profileSelection,
-  seatColors
+  seatColors,
+  // Which version of the how-to-play flow this player has finished or skipped. Its own key rather
+  // than a GameSettings field, so it survives 'Reset All Stats' (achievements.tsx, which only clears
+  // useGameStats' own storage) and never touches gameSettingsValidation's strict isValidSettings.
+  // Persisted like every other key here (the persistConfig below has no whitelist/blacklist). See
+  // guideSlice.ts's own doc.
+  guide
 })
 
 const persistConfig = {
@@ -64,7 +72,11 @@ const persistConfig = {
   // pointing straight at persistReducer.js's setTimeout. Disabling it (falsy timeout skips the
   // setTimeout call entirely) is redux-persist's own documented way to opt out; AsyncStorage reads
   // failing to ever resolve at all isn't a failure mode worth a 5s failsafe for.
-  timeout: 0
+  timeout: 0,
+  // Grandfathers players from the shipped pre-redux build past the how-to-play guide: no root store
+  // yet, but one of that build's own keys present, means "played before", not a fresh install. A root
+  // store that already exists passes through unchanged. See LEGACY_STORAGE_KEYS (guideSlice.ts).
+  migrate: createReturningPlayerMigrate(AsyncStorage, LEGACY_STORAGE_KEYS)
 }
 
 const persistedReducer = persistReducer(persistConfig, rootReducer)
