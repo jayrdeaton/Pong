@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Pong",
-    "slug": "pong",
+    "slug": "Pong",
     "version": "1.0.0",
     "scheme": "pong",
     "description": "A digital Pong game",
@@ -76,12 +76,12 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "13a5a7e9-cb14-473c-b74c-a0d1ffcacff6"
+        "projectId": "58d4e9b7-271b-44c7-9086-8a4046efad77"
       }
     },
     "owner": "jayrdeaton",
     "updates": {
-      "url": "https://u.expo.dev/13a5a7e9-cb14-473c-b74c-a0d1ffcacff6"
+      "url": "https://u.expo.dev/58d4e9b7-271b-44c7-9086-8a4046efad77"
     }
   }
 }
