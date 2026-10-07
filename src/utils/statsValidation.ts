@@ -4,7 +4,7 @@ import { AiDifficulty, BallSpeedLevel, MatchRecord, PointTotals, ProfileStats, S
 
 // Kept out of hooks/useGameStats.tsx so it's testable without dragging in
 // @react-native-async-storage/async-storage, which throws at import time under Jest's plain Node
-// environment — mirrors gameSettingsValidation.ts.
+// environment.
 
 // Each bucket is built by its own factory function, not a plain module constant — DEFAULT_PROFILE_STATS
 // and DEFAULT_STATS below each need their own independent objects, not two references to the same

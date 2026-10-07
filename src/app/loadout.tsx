@@ -11,8 +11,9 @@ import { useDispatch, useSelector } from 'react-redux'
 
 import { LOADOUT_SHARED_CONTROLS_IDS, LoadoutSharedControls } from '@/components/LoadoutSharedControls'
 import { SettingsDialog } from '@/components/SettingsDialog'
-import { useGameSettings } from '@/hooks/useGameSettings'
 import { useProfiles } from '@/hooks/useProfiles'
+import { useSettings } from '@/hooks/useSettings'
+import { liveplayActions } from '@/redux/liveplaySlice'
 import { seatColorsActions } from '@/redux/seatColorsSlice'
 import type { AppDispatch, RootState } from '@/redux/store'
 import { BallSpeedLevel, ControlScheme, GameMode, PaddleSizeLevel, Player } from '@/types'
@@ -73,7 +74,7 @@ const CONTROL_SCHEME_OPTIONS: MenuOption<ControlScheme>[] = [
 ]
 
 export default function LoadoutScreen() {
-  // Read only from this screen's own route param, never from useGameSettings().settings.gameMode
+  // Read only from this screen's own route param, never from useSettings().settings.gameMode
   // — the settings hook's AsyncStorage read is async, and racing it here could momentarily show
   // the wrong number of player panels.
   const params = useLocalSearchParams<{ mode: string }>()
@@ -84,7 +85,7 @@ export default function LoadoutScreen() {
   // persistence needs it early now.
   const p2IsHuman = humanPlayers.includes(2)
 
-  const { settings, setSettings, commitRoundSettings } = useGameSettings()
+  const { settings, setSettings } = useSettings()
   // Local, non-persisted — seeded from the real persisted difficulty (not Snake's own `?? 'none'`
   // default) so "One Player" keeps defaulting to today's vsCpu behavior; a player has to explicitly
   // pick "None" to reach solo/Brickbreaker. Only ever meaningful mid-vsCpu-setup: never read once
@@ -298,14 +299,22 @@ export default function LoadoutScreen() {
     }, [])
   )
 
+  // Read through a ref rather than listed as a dependency of the effect below: this screen stays
+  // mounted (and still all Ready) under /game, so a settings change made there (toggling Lock
+  // Orientation or Edge Guard in /game's Settings dialog, or the lock recording its angle) would
+  // otherwise re-run that effect and push a second /game.
+  const settingsRef = useRef(settings)
+  useEffect(() => {
+    settingsRef.current = settings
+  }, [settings])
+
   useEffect(() => {
     if (!humanPlayers.every((p) => ready[p])) return
-    // finalMode, not `settings.gameMode` — same race the comment above guards against: this
-    // screen's own route param (by way of finalMode's difficulty === 'none' resolution) is the
-    // trustworthy value, not the settings hook's own (possibly still-loading) copy.
-    commitRoundSettings({ ...settings, gameMode: finalMode })
+    // finalMode (this screen's own route param, by way of its difficulty === 'none' resolution), not
+    // settings.gameMode: the route param is the mode this loadout was opened for.
+    dispatch(liveplayActions.setActiveRoundSettings({ ...settingsRef.current, gameMode: finalMode }))
     router.push('/game')
-  }, [ready, humanPlayers, settings, finalMode, commitRoundSettings])
+  }, [ready, humanPlayers, finalMode, dispatch])
 
   const bg = dark ? '#000000' : '#FFFFFF'
   const fg = dark ? '#FFFFFF' : '#000000'

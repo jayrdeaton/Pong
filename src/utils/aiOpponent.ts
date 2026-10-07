@@ -5,7 +5,7 @@ import { clampPaddleY } from '@/utils/board'
 export type AIDifficulty = 'easy' | 'medium' | 'hard'
 
 // Loadout-screen-only: picking 'none' resolves the round to GameMode 'solo' instead of 'vsCpu'
-// (see app/loadout.tsx) rather than ever being persisted as a real AIDifficulty — GameSettings.
+// (see app/loadout.tsx) rather than ever being persisted as a real AIDifficulty — Settings.
 // aiDifficulty itself stays plain AIDifficulty since it's consumed elsewhere as a real difficulty
 // (useAIOpponent, VsCpuStats.byDifficulty, beatCpuFamily()).
 export type AIDifficultyChoice = AIDifficulty | 'none'

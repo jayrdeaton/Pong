@@ -22,8 +22,7 @@ interface ProfilesContextValue {
   selectProfile: (seat: Player, profileId: string | null) => void
   // True once the one-time initial reconciliation below (redux-persist's own already-rehydrated
   // `profiles` against the shared App Group store) has completed. Read by _layout.tsx's own
-  // SettingsAndProfilesGate, which holds its children back until this flips true — see that
-  // file's own doc for the settings-then-profiles serial gating order this app uses.
+  // GatedApp, which holds its children (and the splash screen) back until this flips true.
   loaded: boolean
 }
 
@@ -34,7 +33,7 @@ interface Props {
 }
 
 // Single source of truth for saved player profiles, mounted once in _layout.tsx — same
-// single-Provider rationale as useGameSettings.tsx (expo-router keeps prior screens mounted, so a
+// single-Provider rationale as useGameStats.tsx (expo-router keeps prior screens mounted, so a
 // per-screen copy could go stale or clobber a concurrent update).
 //
 // `profiles` itself now lives in Redux (redux/store.ts's `profiles` key, @tastic/profile's own

@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { Icon, Text } from 'react-native-paper'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useDispatch, useSelector } from 'react-redux'
 
 import Board from '@/components/BoardHost'
 import KeyboardInputLayer from '@/components/KeyboardInputLayer'
@@ -21,15 +22,16 @@ import { ACHIEVEMENT_TIER_COLORS } from '@/constants/achievements'
 import { MONO_FONT } from '@/constants/fonts'
 import { DESKTOP_WEB_MIN_WIDTH, SOLO_LIVES } from '@/constants/game'
 import { useAIOpponent } from '@/hooks/useAIOpponent'
-import { useGameSettings } from '@/hooks/useGameSettings'
 import { useGameSound } from '@/hooks/useGameSound'
 import { useGameState } from '@/hooks/useGameState'
 import { useGameStats } from '@/hooks/useGameStats'
 import { useProfiles } from '@/hooks/useProfiles'
+import { liveplayActions } from '@/redux/liveplaySlice'
+import { DEFAULT_SETTINGS } from '@/redux/settingsSlice'
+import type { AppDispatch, RootState } from '@/redux/store'
 import { AchievementDefinition, Player } from '@/types'
 import { computeBoardLayout } from '@/utils/board'
 import { humanPlayersFor, tiltControlActiveFor } from '@/utils/gameMode'
-import { DEFAULT_SETTINGS } from '@/utils/gameSettingsValidation'
 import { safeBack } from '@/utils/navigation'
 
 // Converts a point expressed in the board's own LOCAL coordinate space (the same frame board.x/y/
@@ -62,7 +64,8 @@ const SEATS: readonly Player[] = [1, 2]
 export default function GameScreen() {
   // Committed once by /loadout when every human player readied up — falls back to defaults for a
   // direct/deep link to this screen, which never went through /loadout to commit anything.
-  const { activeRoundSettings, setIsActivelyPlaying } = useGameSettings()
+  const activeRoundSettings = useSelector((state: RootState) => state.liveplay.activeRoundSettings)
+  const dispatch = useDispatch<AppDispatch>()
   const { recordMatchOutcome, recordSoloOutcome } = useGameStats()
   const { clear: clearToasts, success: showAchievementToast } = useToast()
   const roundSettings = activeRoundSettings ?? DEFAULT_SETTINGS
@@ -119,7 +122,7 @@ export default function GameScreen() {
   // board's own `rotation` below, and a sustained extreme steering tilt held past this hook's own
   // ~275ms commit window could otherwise cross its dominance-ratio threshold and flip
   // orientationMode/upsideDown, visually rotating the whole board mid-rally. roundSettings is frozen
-  // for the entire round (see useGameSettings.tsx's own activeRoundSettings doc), so this engages the
+  // for the entire round (see liveplaySlice.ts's activeRoundSettings doc), so this engages the
   // instant this screen mounts (well before any actual tilt-steering begins) and never toggles again
   // mid-round.
   const { orientationMode, upsideDown } = useOrientationState(tiltControlActive)
@@ -182,17 +185,18 @@ export default function GameScreen() {
     hasProgressRef.current = () => (isSolo ? lives < SOLO_LIVES || bricks.some((b) => b.destroyed) : scores[0] > 0 || scores[1] > 0)
   })
 
-  // Mirrors "an actual live rally, not paused" up to useGameSettings.tsx's own useEdgeGestureGuard
-  // call rather than calling that hook directly here: it stays mounted once at the provider (same
-  // as every other cross-cutting settings concern in this app), and this is just the one signal it
-  // has no other way to read. Unlocked between points (idle/pointScored/gameOver) and whenever a
+  // Mirrors "an actual live rally, not paused" into liveplay.activelyPlaying for Providers.tsx's
+  // EdgeGuardBridge rather than calling useEdgeGestureGuard directly here: it stays mounted once for
+  // the app's lifetime, and this is just the one signal it has no other way to read. Unlocked between points (idle/pointScored/gameOver) and whenever a
   // dialog is open (paused) — back/settings stay unconditionally visible here (unlike Snake/
   // LightCycles), so there's no button-visibility signal to key off instead. Reset to false on
   // unmount too, so leaving this screen mid-rally by any path can't leave Edge Guard stuck on.
   useEffect(() => {
-    setIsActivelyPlaying(phase === 'live' && !paused)
-    return () => setIsActivelyPlaying(false)
-  }, [phase, paused, setIsActivelyPlaying])
+    dispatch(liveplayActions.setActivelyPlaying(phase === 'live' && !paused))
+    return () => {
+      dispatch(liveplayActions.setActivelyPlaying(false))
+    }
+  }, [phase, paused, dispatch])
 
   // No toast may stay on screen during live play — only between rounds or at game over. Unlock
   // toasts fire at game over and last 7s, so a quick restart would otherwise carry them into the

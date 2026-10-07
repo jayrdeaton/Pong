@@ -9,8 +9,10 @@ import { FLUSH, PAUSE, PERSIST, persistReducer, persistStore, PURGE, REGISTER, R
 import { DEFAULT_P1_COLOR, DEFAULT_P2_COLOR } from '@/constants/game'
 
 import guide, { LEGACY_STORAGE_KEYS } from './guideSlice'
+import liveplay from './liveplaySlice'
 import profileSelection from './profileSelectionSlice'
 import seatColors from './seatColorsSlice'
+import settings from './settingsSlice'
 
 const hasError = (action: unknown): action is { error?: unknown } => typeof action === 'object' && action !== null && 'error' in action && Boolean(action.error)
 
@@ -54,11 +56,14 @@ const rootReducer = combineReducers({
   profileSelection,
   seatColors,
   // Which version of the how-to-play flow this player has finished or skipped. Its own key rather
-  // than a GameSettings field, so it survives 'Reset All Stats' (achievements.tsx, which only clears
-  // useGameStats' own storage) and never touches gameSettingsValidation's strict isValidSettings.
-  // Persisted like every other key here (the persistConfig below has no whitelist/blacklist). See
+  // than a Settings field, so it survives 'Reset All Stats' (achievements.tsx, which only clears
+  // useGameStats' own storage). Persisted like every other key here except liveplay. See
   // guideSlice.ts's own doc.
-  guide
+  guide,
+  // The persisted settings (see settingsSlice.ts).
+  settings,
+  // Transient per-round state, the one key blacklisted from persistence below (see liveplaySlice.ts).
+  liveplay
 })
 
 const persistConfig = {
@@ -73,6 +78,8 @@ const persistConfig = {
   // setTimeout call entirely) is redux-persist's own documented way to opt out; AsyncStorage reads
   // failing to ever resolve at all isn't a failure mode worth a 5s failsafe for.
   timeout: 0,
+  // liveplay is per-round state that must never survive a relaunch (see liveplaySlice.ts).
+  blacklist: ['liveplay'],
   // Grandfathers players from the shipped pre-redux build past the how-to-play guide: no root store
   // yet, but one of that build's own keys present, means "played before", not a fresh install. A root
   // store that already exists passes through unchanged. See LEGACY_STORAGE_KEYS (guideSlice.ts).

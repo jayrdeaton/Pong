@@ -3,8 +3,8 @@ import type { ReactElement } from 'react'
 
 import { GuideUpDownKeys } from '@/components/GuideArt'
 import { getGuideSteps } from '@/constants/guideSteps'
+import { DEFAULT_SETTINGS } from '@/redux/settingsSlice'
 import type { ControlScheme, Player } from '@/types'
-import { DEFAULT_SETTINGS } from '@/utils/gameSettingsValidation'
 
 const DEFAULT_CONTROLS = DEFAULT_SETTINGS.controlScheme
 const ALL_SCHEMES: ControlScheme[] = ['mouse', 'wasd', 'arrows', 'ijkl', 'numpad']

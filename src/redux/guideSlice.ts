@@ -36,7 +36,7 @@ export default slice.reducer
 //   airhockey.vibrate and airhockey.sound are components/Feedback.tsx's. AirHockey's own keys can't
 //   cause a false match: each app's AsyncStorage is its own sandbox on a device, its own origin on web.
 //
-// Today's build writes none of these before PersistGate opens (GameSettingsProvider and
-// GameStatsProvider, the only writers left, sit inside Providers' PersistGate), so a fresh install can
+// Today's build writes none of these before PersistGate opens (GameStatsProvider, the only writer
+// left, sits inside Providers' PersistGate; settings live in the Redux store since 2026-10-07), so a fresh install can
 // never be taken for a returning player.
 export const LEGACY_STORAGE_KEYS = ['pong.achievements', 'pong.cpuColor', 'pong.profiles', 'pong.settings', 'pong.stats', 'airhockey.appearance', 'airhockey.playerColors', 'airhockey.sound', 'airhockey.vibrate'] as const
