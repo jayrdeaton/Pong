@@ -111,8 +111,10 @@ export default function LoadoutScreen() {
   // and for vs-CPU, it's simply whichever way the solo player is holding it. Lock Orientation (see
   // SettingsDialog) is the opt-in for pinning it. app.json is portrait-locked at the OS level now
   // (no more real OS rotation to rely on — see @tastic/core's FakeLandscapeView below,
-  // which fakes the rest entirely in JS from this hook's live accelerometer reading).
-  const { orientationMode, p1OnRight, upsideDown, resolved: p1OnRightResolved } = useOrientationState(settings.lockOrientation)
+  // which fakes the rest entirely in JS from this hook's live accelerometer reading). The lock is
+  // applied app-wide by _layout.tsx's OrientationProvider (`freezeWhileLocked`), so nothing is
+  // passed here.
+  const { orientationMode, p1OnRight, upsideDown, resolved: p1OnRightResolved } = useOrientationState()
 
   // The panel area's own layout (which branch renders, which side each panel is on) lags one fade
   // behind the live orientationMode/p1OnRight/upsideDown above — see useDualZoneLayout's own

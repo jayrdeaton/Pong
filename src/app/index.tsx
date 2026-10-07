@@ -13,14 +13,15 @@ import { useGameSettings } from '@/hooks/useGameSettings'
 import { GameMode } from '@/types'
 
 export default function HomeScreen() {
-  const { settings, setSettings } = useGameSettings()
+  const { setSettings } = useGameSettings()
   // orientationMode just follows the device's current physical tilt (see
   // useOrientationState), so the title screen rotates along with everywhere else as soon as
-  // the phone is turned — Lock Orientation (see SettingsDialog) is the opt-in for pinning it.
+  // the phone is turned. Lock Orientation (see SettingsDialog) is the opt-in for pinning it, applied
+  // app-wide by _layout.tsx's OrientationProvider (`freezeWhileLocked`), so nothing is passed here.
   // app.json is portrait-locked at the OS level now (no more real OS rotation to rely on) — see
   // FakeLandscapeView below, which fakes the rest entirely in JS from this hook's live
   // accelerometer reading.
-  const { orientationMode, p1OnRight, upsideDown } = useOrientationState(settings.lockOrientation)
+  const { orientationMode, p1OnRight, upsideDown } = useOrientationState()
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   // First launch only (and once per session): opens the how-to-play cards over this screen. Called

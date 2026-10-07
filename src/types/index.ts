@@ -1,4 +1,5 @@
 import { AchievementDefinition as BaseAchievementDefinition, DayStreakState, OutcomeRecord, RoundResult, WinStreakState } from '@tastic/achievements'
+import type { ViewRotation } from '@tastic/core'
 import { KeyScheme } from '@tastic/input'
 
 export type Player = 1 | 2
@@ -40,12 +41,15 @@ export interface GameSettings {
   // classic Pong is unchanged. Meaningless for 'solo', which is unconditionally a brick field
   // regardless of this flag (see bricksActiveFor in utils/gameMode.ts).
   bricksEnabled: boolean
-  // Opt-in, same convention AirHockey/BoxHockey both already use — @tastic/core's
-  // useOrientationState(locked?) takes this directly as its `locked` param, freezing
-  // whatever orientationMode/p1OnRight/upsideDown it last resolved to rather than continuing to
-  // track live device tilt. Off by default: the seating layout just follows however the device is
-  // actually being held.
+  // Lock Orientation, app-wide: _layout.tsx's OrientationBridge hands it to @tastic/core's
+  // OrientationProvider (freezeWhileLocked), which freezes the one shared orientation reading for
+  // every screen, the in-game board, dialogs and the status bar alike. Off by default: all of those
+  // just follow however the device is actually being held.
   lockOrientation: boolean
+  // The angle the lock is holding. Written by OrientationProvider's onLockChange (recorded on lock,
+  // cleared on unlock) and handed back as lockInitialValue, so a relaunch reopens in the locked
+  // orientation instead of portrait. Never set by the UI directly; see isValidLockedRotation.
+  lockedRotation?: ViewRotation
   // iOS-only. Off by default — deliberately opt-in rather than always-on, so it only kicks in for
   // someone who's actually hit the problem and gone looking for a fix, instead of every player
   // eating a "swipe twice to go home" surprise from day one. Mirrored into native UserDefaults (see

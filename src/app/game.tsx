@@ -79,10 +79,11 @@ export default function GameScreen() {
   const tiltControlActive = tiltControlActiveFor(roundSettings.gameMode, roundSettings.tiltControlEnabled)
 
   // ─── Orientation / rotation ────────────────────────────────────────────────
-  // orientationMode/upsideDown are live accelerometer tilt readings (frozen at their last value
-  // while roundSettings.lockOrientation is on — see useOrientationState's own `locked` param,
-  // the same opt-in convention AirHockey/BoxHockey both already use for their own "Lock Orientation"
-  // toggle).
+  // orientationMode/upsideDown are live accelerometer tilt readings, frozen at their last value while
+  // the Lock Orientation setting is on. That lock is app-wide (_layout.tsx's OrientationProvider
+  // freezes the shared reading under `freezeWhileLocked`), so it's live settings, not roundSettings,
+  // and toggling it from this screen's own Settings dialog applies mid-round. The only per-screen
+  // lock left here is tilt control's, below.
   //
   // DELIBERATE DEVIATION from calling @tastic/core's getFixedZoneRotation directly: that
   // function (verified against the installed package's actual source, src/rotation.ts) returns 0 for
@@ -113,14 +114,15 @@ export default function GameScreen() {
   // rather than reasoned out in the abstract, this polarity should be spot-checked in a simulator by
   // rotating through both faceToFace placements and flipped if player 1's paddle doesn't end up
   // nearest whichever seat is holding the device's own "right-side-up" reading direction.
-  // `|| tiltControlActive` — forced regardless of the user's own Lock Orientation setting whenever
-  // tilt steering is active: this same live reading drives the board's own `rotation` below, and a
-  // sustained extreme steering tilt held past this hook's own ~275ms commit window could otherwise
-  // cross its dominance-ratio threshold and flip orientationMode/upsideDown, visually rotating the
-  // whole board mid-rally. roundSettings is frozen for the entire round (see
-  // useGameSettings.tsx's own activeRoundSettings doc), so this engages the instant this screen
-  // mounts — well before any actual tilt-steering begins — and never toggles again mid-round.
-  const { orientationMode, upsideDown } = useOrientationState(roundSettings.lockOrientation || tiltControlActive)
+  // `locked` = tiltControlActive: a per-screen lock on top of the app-wide Lock Orientation setting,
+  // forced whenever tilt steering is active even with that setting off. This same reading drives the
+  // board's own `rotation` below, and a sustained extreme steering tilt held past this hook's own
+  // ~275ms commit window could otherwise cross its dominance-ratio threshold and flip
+  // orientationMode/upsideDown, visually rotating the whole board mid-rally. roundSettings is frozen
+  // for the entire round (see useGameSettings.tsx's own activeRoundSettings doc), so this engages the
+  // instant this screen mounts (well before any actual tilt-steering begins) and never toggles again
+  // mid-round.
+  const { orientationMode, upsideDown } = useOrientationState(tiltControlActive)
   // vsCpu always seats the sole human at player 1 (see humanPlayersFor) — pin them to the visual
   // bottom of a portrait/faceToFace hold, the natural single-hand grip, rather than the ±90/
   // upsideDown pairing above. That pairing is tuned for two-player pass-and-play, where either seat
