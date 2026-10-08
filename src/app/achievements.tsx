@@ -52,7 +52,7 @@ export default function AchievementsScreen() {
   // Snake's own identical achievements.tsx fix for the same gap.
   const rotation = useRotation()
   const insets = rotateInsets(useSafeAreaInsets(), rotation)
-  const { stats, unlockedAchievements, resetAll, loaded } = useGameStats()
+  const { stats, unlockedAchievements, resetAll } = useGameStats()
   const { profiles } = useProfiles()
   const profilePickerHost = usePopoverHost()
   const fg = dark ? '#FFFFFF' : '#000000'
@@ -70,27 +70,6 @@ export default function AchievementsScreen() {
   const overall = useMemo(() => getOverallTotals(statsView), [statsView])
   const rankings = useMemo(() => getProfileRankings(profiles, stats.profiles), [profiles, stats.profiles])
   const pointDiff = statsView.points.scored - statsView.points.conceded
-
-  // Screen-local guard only — useGameStats' own `loaded` mirrors @tastic/achievements'
-  // useAchievements().loaded, which resolves asynchronously (see useGameStats.tsx). This screen is
-  // reached by navigation rather than being the app's first screen, so it holds off rendering real
-  // numbers here itself instead of holding the whole app's launch splash on it (see splashGate.ts).
-  // Without this, tapping in fast enough could catch a flash of "0 games played" before the real
-  // stats land. onReset is omitted here too — nothing worth resetting has rendered yet, so exposing
-  // the live, destructive "Reset All Stats" button (BaseStatsScreen only shows it at all when
-  // onReset is passed) before real numbers exist would offer a confirm flow with nothing real behind
-  // it, same fix as AirHockey's/BoxHockey's own achievements.tsx.
-  if (!loaded) {
-    return (
-      <FakeLandscapeView style={styles.rotatable}>
-        <BaseStatsScreen onBack={safeBack} insets={insets} rotation={rotation}>
-          <Text variant='bodyMedium' style={{ color: fgMuted, fontFamily: MONO_FONT }}>
-            Loading…
-          </Text>
-        </BaseStatsScreen>
-      </FakeLandscapeView>
-    )
-  }
 
   return (
     <FakeLandscapeView style={styles.rotatable}>

@@ -12,7 +12,7 @@ export default function Profiles() {
   const { profiles, createProfile, updateProfile, deleteProfile } = useProfiles()
   // Only for wiring onDelete below — nothing else on this screen touches stats directly. Without
   // this, deleting a profile here only removed it from useProfiles()' own roster, leaving its stats
-  // bucket and achievement-unlock history permanently orphaned in AsyncStorage under an id nothing
+  // bucket and achievement-unlock history permanently orphaned in the store under an id nothing
   // can ever reference again.
   const { removeProfileStats } = useGameStats()
 
