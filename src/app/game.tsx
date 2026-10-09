@@ -2,7 +2,7 @@ import { useAutoPaperTheme } from '@rific/auto-paper'
 import { Button, IconButton, useVibration } from '@rific/feedback-press'
 import { useToast } from '@rific/toaster'
 import { broadcastDeviceUnlocks } from '@tastic/achievements'
-import { rotateInsets, useOrientationState } from '@tastic/core'
+import { rotateInsets, useBackgroundPause, useOrientationState } from '@tastic/core'
 import { AchievementUnlockList, type AchievementUnlockOwner, ConfirmDialog, useQuitConfirmation } from '@tastic/hud'
 import { Profile, ProfileChip } from '@tastic/profile'
 import { needsSharedNeutralZone } from '@tastic/split-screen'
@@ -169,7 +169,11 @@ export default function GameScreen() {
   // broken brick is solo's own equivalent of "there's progress worth confirming before losing it".
   const hasProgressRef = useRef<() => boolean>(() => false)
   const { confirmVisible, requestBack, cancelBack } = useQuitConfirmation(() => hasProgressRef.current(), safeBack)
-  const paused = settingsOpen || confirmVisible
+  // Leaving the app mid-match (home, app switch, a phone call, Control Center) latches a pause that
+  // only the Paused dialog's Resume clears - see @tastic/core's useBackgroundPause. Skipped once the
+  // match is over, or while a dialog already holds the pause by itself.
+  const { backgroundPaused, resume } = useBackgroundPause(() => phase !== 'gameOver' && !settingsOpen && !confirmVisible)
+  const paused = settingsOpen || confirmVisible || backgroundPaused
 
   // Two-player (pass-and-play) only — seat -> that seat's own newly-unlocked achievements this
   // game, read by the two-player game-over overlay below to badge each seat correctly (see the
@@ -365,6 +369,17 @@ export default function GameScreen() {
   // even here for the icon to read upright at all.
   const neutralZone = needsSharedNeutralZone(orientationMode, humanPlayers.length)
 
+  const progressMessage = isSolo ? (
+    <Text style={{ color: fgMuted }}>
+      {lives} {lives === 1 ? 'life' : 'lives'} · {bricks.filter((b) => b.destroyed).length} / {bricks.length} bricks
+    </Text>
+  ) : (
+    <>
+      <Text style={{ color: playerColor[1] }}>{scores[0]}</Text>
+      <Text style={{ color: fgMuted }}> – </Text>
+      <Text style={{ color: playerColor[2] }}>{scores[1]}</Text>
+    </>
+  )
   return (
     <View style={[styles.root, { backgroundColor: bg }]}>
       <StatusBar hidden />
@@ -516,30 +531,10 @@ export default function GameScreen() {
       {/* Quit confirmation — shared @tastic/hud dialog; accepts its primary accent + default font
           in place of this dialog's previous secondary-accent Quit button and MONO_FONT styling
           (a deliberate trade-off for convergence onto the shared component). */}
-      <ConfirmDialog
-        visible={confirmVisible}
-        title='Quit Match?'
-        message={
-          isSolo ? (
-            <Text style={{ color: fgMuted }}>
-              {lives} {lives === 1 ? 'life' : 'lives'} · {bricks.filter((b) => b.destroyed).length} / {bricks.length} bricks
-            </Text>
-          ) : (
-            <>
-              <Text style={{ color: playerColor[1] }}>{scores[0]}</Text>
-              <Text style={{ color: fgMuted }}> – </Text>
-              <Text style={{ color: playerColor[2] }}>{scores[1]}</Text>
-            </>
-          )
-        }
-        confirmLabel='Quit'
-        cancelLabel='Cancel'
-        icon='alert-circle-outline'
-        destructive={false}
-        onConfirm={safeBack}
-        onCancel={cancelBack}
-        rotation={rotation}
-      />
+      <ConfirmDialog visible={confirmVisible} title='Quit Match?' message={progressMessage} confirmLabel='Quit' cancelLabel='Cancel' icon='alert-circle-outline' destructive={false} onConfirm={safeBack} onCancel={cancelBack} rotation={rotation} />
+      {/* Shown when the app comes back from the background mid-match (see useBackgroundPause above):
+      play stays frozen until Resume, so a match never restarts before the player is back and ready. */}
+      <ConfirmDialog visible={backgroundPaused} title='Paused' message={progressMessage} confirmLabel='Resume' cancelLabel='Quit' icon='pause-circle-outline' destructive={false} onConfirm={resume} onCancel={safeBack} rotation={rotation} />
 
       {/* rotation={rotation} — same physical-hold-compensating rotation the board itself uses (see
           the rotation comment above), not a separate reading; previously omitted, leaving this

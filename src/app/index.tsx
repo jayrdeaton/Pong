@@ -53,11 +53,10 @@ export default function HomeScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: bg }]}>
-      {/* Everything below reads correctly no matter which way the phone is actually being held —
-      see @tastic/core's FakeLandscapeView for why this is needed at all now that the app is
-      portrait-locked at the OS level (no more real OS rotation to rely on). SettingsDialog is
-      deliberately left outside this wrapper — it renders as a centered modal overlay via Portal,
-      unaffected by (and not needing) this transform. */}
+      {/* Everything below reads correctly no matter which way the phone is actually being held:
+      see @tastic/core's FakeLandscapeView. SettingsDialog stays outside it: it renders through a
+      Portal over the whole screen, and BaseSettingsDialog lays itself out in its own frame turned
+      by the `rotation` passed below (see @tastic/hud's RotatedFrame). */}
       <FakeLandscapeView orientationMode={orientationMode} p1OnRight={p1OnRight} upsideDown={upsideDown} style={styles.rotatable}>
         <IconButton icon='trophy' iconColor={fg} size={24} style={[styles.topLeft, { top: 8 + insets.top, left: 8 + insets.left }]} onPress={() => router.push('/achievements')} accessibilityLabel='Stats & Achievements' />
         <IconButton icon='cog' iconColor={fg} size={24} style={[styles.topRight, { top: 8 + insets.top, right: 8 + insets.right }]} onPress={() => setSettingsOpen(true)} accessibilityLabel='Settings' />

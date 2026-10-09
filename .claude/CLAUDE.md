@@ -13,7 +13,7 @@ A digital Pong game (Expo/React Native, Skia-rendered). Part of the `@rific`/`@t
 ```bash
 npm run lint          # expo lint .
 npm run fix            # expo lint . --fix
-npm test               # Jest (12 suites, 194 tests)
+npm test               # Jest (14 suites, 204 tests)
 npm run test:watch     # Jest --watchAll
 npm run typecheck      # tsc
 npm run verify         # lint + test + typecheck
@@ -132,6 +132,13 @@ A first-run, replayable "how to play" flow, built on `@tastic/hud/guide` (a ligh
 - Needs `@tastic/core` 0.11.0+. Lock Orientation is native only: web derives its reading from the window shape and is never frozen.
 - **Pong only:** `/game` keeps one per-screen lock on top, `useOrientationState(tiltControlActive)`, so tilt steering can't rotate the board mid-rally even with the setting off.
 
+## Background pause, profile prune, control scheme swaps (2026-10-08)
+
+- **Background pause:** `game.tsx` calls `@tastic/core`'s `useBackgroundPause`. Any AppState change away from `'active'` mid-match (home, app switch, a call, iOS `'inactive'` for Control Center; a hidden tab on web) latches `backgroundPaused`, which is ORed into `paused`, so the game loop, serve pause, AI, all three input layers and Edge Guard stop exactly as they do for an open dialog. It never latches at game over or while Settings or Quit Match? is already open. The latch survives the return: a 'Paused' `ConfirmDialog` (same `rotation` and `progressMessage` lives/score line as Quit Match?) offers Resume, which clears it and restarts the serve pause from scratch, or Quit (`safeBack`, no second confirmation). The hook call and the Paused dialog are the same text in AirHockey, BoxHockey, LightCycles, Pong and Snake.
+- **Profile prune:** `useProfiles.tsx` dispatches `@tastic/profile`'s `profileSelectionActions.pruneToRoster(ids)` after both `setAll` calls (the initial reconcile and `onRemoteChange`), so a seat never keeps pointing at a profile a sibling app deleted (its results would land under a ghost id). Unchanged prunes return the same state. Stats of deleted profiles and seat color overrides are deliberately left alone: a transient empty shared-store read would otherwise erase real data. Tested in `useProfiles.test.tsx` against a fake App Group module.
+- **Control schemes:** both loadout pickers write through @tastic/input's assignSeatScheme (swap on conflict: picking the other seat's scheme hands it this seat's old one), so the two seats never share a scheme. Without it a 1 Player pick of seat 2's scheme left both seats on it, and KeyboardInputLayer sent every one of those keys to seat 1 in a later 2 Player game.
+- **Unreleased packages:** `useBackgroundPause` (planned `@tastic/core` 0.12.0), `pruneToRoster` (`@tastic/profile`, after 0.10.0) and `assignSeatScheme` (`@tastic/input`, after 0.3.0) were installed from local tarballs with `npm install --no-save`. `package.json` ranges still need bumping to the released versions before these changes are committed.
+
 ## Testing
 
 - Framework: Jest (`@infinitetoken/jest-config/expo`, `jest-expo` preset)
@@ -152,6 +159,10 @@ src/
   __tests__/    - test suites
   __mocks__/    - manual Jest mocks for native modules (Reanimated, Worklets)
 ```
+
+## OS portrait lock (2026-10-08)
+
+The OS is locked to portrait on every device and the app draws all rotation itself (`@tastic/core`'s `OrientationProvider` reads the accelerometer). `@tastic/core`'s Expo config plugin (`"@tastic/core"` in `app.json`'s `plugins`) owns every native setting that depends on: `orientation: "portrait"`; `ios.requireFullScreen` plus a Portrait-only iPad orientation list (audit F009: without it Expo forces all four iPad orientations, so iOS turned the screen on top of the app's own rotation, and Split View, Slide Over and Stage Manager are the price); and `android:appCategory="game"` (Android 16 and later ignore the portrait lock on tablets and unfolded foldables, except for games). Don't set any of those by hand here, and don't add `expo-screen-orientation` (it re-enables upside down on home-button iPhones). The why behind each is in @tastic/core's README. Check the result with `npx expo config --type introspect`; it only takes effect in a new native build.
 
 ## CI
 

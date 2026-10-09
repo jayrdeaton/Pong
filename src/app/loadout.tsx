@@ -1,6 +1,7 @@
 import { defaultColors, getThirdColor, useAutoPaperTheme, useThemeSettings } from '@rific/auto-paper'
 import { FakeLandscapeView, getViewRotation, rotateInsets, useOrientationState } from '@tastic/core'
 import { ControlSchemePicker, CornerActionButtons, getColorPopoverId, getCpuDifficultyPopoverId, getInlineColorPickerContentSize, getLabeledDropdownContentHeight, LABELED_DROPDOWN_POPOVER_WIDTH, MenuOption, PlayerSetupPanel, PressAwayOverlay, ReadyButton, SharedActionBand, usePopoverHost, useZoneClampedAlign } from '@tastic/hud'
+import { assignSeatScheme } from '@tastic/input'
 import { DualZoneLayout, needsSharedNeutralZone, useDualZoneLayout } from '@tastic/split-screen'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -445,7 +446,7 @@ export default function LoadoutScreen() {
       allowSwapTaken={gameMode === 'vsCpu' && p2Exists}
       colorAlignOverride={p1ColorAlignOverride}
       isHuman
-      secondPicker={<ControlSchemePicker id='p1-controls' host={controlsHost} value={settings.controlScheme[1]} onChange={(scheme) => setSettings({ controlScheme: { ...settings.controlScheme, 1: scheme } })} options={CONTROL_SCHEME_OPTIONS} takenValue={p2IsHuman ? settings.controlScheme[2] : undefined} accentColor={p1Color} mutedColor={fgMuted} dark={dark} />}
+      secondPicker={<ControlSchemePicker id='p1-controls' host={controlsHost} value={settings.controlScheme[1]} onChange={(scheme) => setSettings({ controlScheme: assignSeatScheme(settings.controlScheme, 1, scheme) })} options={CONTROL_SCHEME_OPTIONS} takenValue={p2IsHuman ? settings.controlScheme[2] : undefined} accentColor={p1Color} mutedColor={fgMuted} dark={dark} />}
       secondPickerId='p1-controls'
       ready={ready[1]}
       onToggleReady={() => setReady((r) => ({ ...r, 1: !r[1] }))}
@@ -482,7 +483,7 @@ export default function LoadoutScreen() {
       // seat visibly reads as "no opponent" instead of still showing the robot glyph for a CPU that
       // isn't actually there, matching Snake's own identical cpuIcon wiring in its loadout.tsx.
       cpuIcon={!p2IsHuman && difficulty === 'none' ? 'close-circle-outline' : 'robot'}
-      secondPicker={p2IsHuman ? <ControlSchemePicker id='p2-controls' host={p2Host} value={settings.controlScheme[2]} onChange={(scheme) => setSettings({ controlScheme: { ...settings.controlScheme, 2: scheme } })} options={CONTROL_SCHEME_OPTIONS} takenValue={settings.controlScheme[1]} accentColor={p2Color} mutedColor={fgMuted} dark={dark} /> : undefined}
+      secondPicker={p2IsHuman ? <ControlSchemePicker id='p2-controls' host={p2Host} value={settings.controlScheme[2]} onChange={(scheme) => setSettings({ controlScheme: assignSeatScheme(settings.controlScheme, 2, scheme) })} options={CONTROL_SCHEME_OPTIONS} takenValue={settings.controlScheme[1]} accentColor={p2Color} mutedColor={fgMuted} dark={dark} /> : undefined}
       secondPickerId={p2IsHuman ? 'p2-controls' : undefined}
       ready={p2IsHuman ? ready[2] : undefined}
       onToggleReady={p2IsHuman ? () => setReady((r) => ({ ...r, 2: !r[2] })) : undefined}

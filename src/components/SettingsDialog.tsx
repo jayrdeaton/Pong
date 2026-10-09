@@ -9,10 +9,10 @@ import { useSettings } from '@/hooks/useSettings'
 export interface SettingsDialogProps {
   visible: boolean
   onDismiss: () => void
-  // Live physical-hold rotation (see @tastic/split-screen's getViewRotation) — this dialog renders
-  // as a centered Portal modal, unaffected by whichever screen's own FakeLandscapeView wraps its
-  // trigger, so it has to rotate its own card content to read right-side-up for whichever way the
-  // phone is actually being held. Defaults to 0 (unrotated) for any caller that doesn't track it.
+  // Live physical-hold rotation (see @tastic/core's useRotation). BaseSettingsDialog lays the sheet
+  // out in its own frame turned by this (see @tastic/hud's RotatedFrame), so it reads right-side-up
+  // and fits the short edge however the phone is held. Defaults to 0 for a call site that doesn't
+  // track one.
   rotation?: ViewRotation
   // Shows the "How to Play" row that replays the intro. Off by default: the in-game (/game) dialog
   // leaves it out, since opening a full-screen guide over a live match (settings there already
