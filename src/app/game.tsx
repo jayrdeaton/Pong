@@ -294,7 +294,7 @@ export default function GameScreen() {
         // gameOver means every brick was cleared (see useGameState's TICK case); lives <= 0 means
         // the player ran out.
         const result = recordSoloOutcome({ cleared: lives > 0, bricksDestroyed: bricks.filter((b) => b.destroyed).length }, lastSelected[1] ?? undefined)
-        ;[...result.device, ...(result.profiles[1] ?? [])].forEach((achievement) => {
+        ;(broadcastDeviceUnlocks([1] as Player[], result.profiles, result.device, { 1: lastSelected[1] ?? undefined })[1] ?? []).forEach((achievement) => {
           showAchievementToast(achievement.title, 'Achievement unlocked', undefined, { color: ACHIEVEMENT_TIER_COLORS[achievement.tier], icon: achievement.icon })
         })
       } else {
@@ -311,17 +311,17 @@ export default function GameScreen() {
           // own achievement. Broadcasting into seatUnlocks instead lets the two-player game-over
           // overlay below (which already carries the board's own rotationStyle) show each seat's
           // own unlocks once the match settles - same fix LightCycles's game.tsx applies via its
-          // own profileUnlockToast, for the identical reason. Device-wide achievements have no
-          // per-seat owner, but both seats are human here, so they're broadcast into both seats'
-          // own entries rather than dropped or arbitrarily attributed to one side.
-          const broadcast = broadcastDeviceUnlocks([1, 2] as Player[], result.profiles, result.device)
+          // own profileUnlockToast, for the identical reason. Each seat also gets the device-wide
+          // unlocks that are really its own (all of them for a guest, only scope: 'device' ones for
+          // a profile; see @tastic/achievements' broadcastDeviceUnlocks).
+          const broadcast = broadcastDeviceUnlocks([1, 2] as Player[], result.profiles, result.device, profileIds)
           // eslint-disable-next-line react-hooks/set-state-in-effect -- a real one-shot transition guarded by prevPhaseRef above, not a render loop; the sibling vsCpu branch below fires showAchievementToast (which does the same thing inside @rific/toaster) unconditionally in this same effect
           setSeatUnlocks(broadcast)
         } else {
           // vsCpu only ever has one human perspective (seat 1) to address - see the rotation
           // comment above for why this mode never enters a genuine faceToFace two-seat hold in
           // the first place - so the shared, screen-fixed toast is fine here.
-          ;[...result.device, ...(result.profiles[1] ?? [])].forEach((achievement) => {
+          ;(broadcastDeviceUnlocks([1] as Player[], result.profiles, result.device, profileIds)[1] ?? []).forEach((achievement) => {
             showAchievementToast(achievement.title, 'Achievement unlocked', undefined, { color: ACHIEVEMENT_TIER_COLORS[achievement.tier], icon: achievement.icon })
           })
         }

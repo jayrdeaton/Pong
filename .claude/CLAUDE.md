@@ -139,6 +139,10 @@ A first-run, replayable "how to play" flow, built on `@tastic/hud/guide` (a ligh
 - **Control schemes:** both loadout pickers write through @tastic/input's assignSeatScheme (swap on conflict: picking the other seat's scheme hands it this seat's old one), so the two seats never share a scheme. Without it a 1 Player pick of seat 2's scheme left both seats on it, and KeyboardInputLayer sent every one of those keys to seat 1 in a later 2 Player game.
 - **Unreleased packages:** `useBackgroundPause` (planned `@tastic/core` 0.12.0), `pruneToRoster` (`@tastic/profile`, after 0.10.0) and `assignSeatScheme` (`@tastic/input`, after 0.3.0) were installed from local tarballs with `npm install --no-save`. `package.json` ranges still need bumping to the released versions before these changes are committed.
 
+## Achievement toasts (2026-10-14)
+
+`game.tsx` gets every mode's unlocks from `@tastic/achievements` 0.5.0's `broadcastDeviceUnlocks(seats, result.profiles, result.device, profileIds)`: 2 Player passes `[1, 2]`, Vs CPU passes `[1]` and toasts `[1]`. Pong's Solo toasts go through it too, with seat 1's profile. The old Vs CPU merge `[...result.device, ...result.profiles[1]]` toasted a profile's first-round achievements twice (`device` evaluates the whole catalog) and credited a profile with device totals another profile reached; 2 Player broadcast every device unlock onto both seats. Now a seat with a profile gets only `scope: 'device'` entries from `device`, and a guest seat gets all of it. Same change in Snake and LightCycles.
+
 ## Testing
 
 - Framework: Jest (`@infinitetoken/jest-config/expo`, `jest-expo` preset)
