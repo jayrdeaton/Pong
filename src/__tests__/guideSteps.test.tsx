@@ -40,7 +40,7 @@ describe('getGuideSteps', () => {
         // The pager sizes every page to the tallest, so a card without art leaves a visible gap.
         expect(step.art).toBeDefined()
         // Jay's copy rules: no rhetorical questions, no em dashes.
-        expect(`${step.title} ${step.body}`).not.toMatch(/[?—]/)
+        expect(`${step.title} ${step.body}`).not.toMatch(/[?\u2013\u2014]/)
       }
     }
   })

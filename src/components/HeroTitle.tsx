@@ -7,8 +7,8 @@ import { MONO_FONT } from '@/constants/fonts'
 
 export interface HeroTitleProps {
   color: string
-  // The live theme's p1/p2 colors — whatever the players actually picked (see Theme.tsx), not a
-  // fixed pair — so the paddles rallying beneath the title always match the real in-game colors.
+  // The live theme's p1/p2 colors - whatever the players actually picked (see Theme.tsx), not a
+  // fixed pair - so the paddles rallying beneath the title always match the real in-game colors.
   p1Color: string
   p2Color: string
 }
@@ -17,9 +17,9 @@ const WORD = 'PONG'
 
 const TOTAL_STAGGER_MS = getStaggeredWordDuration(WORD.length)
 
-// The paddles (and the ball they volley) stay hidden until the wordmark has mostly landed — one
+// The paddles (and the ball they volley) stay hidden until the wordmark has mostly landed - one
 // "power on" beat once the letters settle, rather than motion competing with letters still flying
-// in — then the rally itself runs forever.
+// in - then the rally itself runs forever.
 const RALLY_DELAY_MS = Math.round(TOTAL_STAGGER_MS * 0.7)
 const PADDLE_IN_MS = 260
 const LEG_MS = 520
@@ -35,7 +35,7 @@ const TRACK_WIDTH = 60
 const HALF_TRAVEL = (TRACK_WIDTH - BALL_SIZE) / 2
 
 // Bespoke hero for this game: a staggered word, then two paddles fade in and volley the ball back
-// and forth forever — styled after the real in-game paddles/ball (see Board.tsx) so the rally reads
+// and forth forever - styled after the real in-game paddles/ball (see Board.tsx) so the rally reads
 // as an echo of actual gameplay, not just decoration.
 export function HeroTitle({ color, p1Color, p2Color }: HeroTitleProps) {
   const reducedMotion = useReducedMotion()
@@ -49,7 +49,7 @@ export function HeroTitle({ color, p1Color, p2Color }: HeroTitleProps) {
 
   // Rally position: 0 = ball at the left paddle, 1 = at the right paddle. Runs 0→1→0→1… forever
   // once the paddles have landed, so the same value also drives each paddle's "just made contact"
-  // pulse below — no separate hit-detection state needed.
+  // pulse below - no separate hit-detection state needed.
   const t = useSharedValue(reducedMotion ? 0.5 : 0)
   useEffect(() => {
     if (reducedMotion) return

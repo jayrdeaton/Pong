@@ -33,9 +33,9 @@ const appSoundReducer = (state: SoundSettings = initialSoundSettings, action: { 
 // Seeded with Pong's own actual default P1/P2 colors (constants/game.ts) rather than auto-paper's
 // generic single-seed default, so a fresh install's very first paint already shows the right
 // colors instead of flashing a placeholder. appearance is likewise pinned to 'dark' rather than
-// left at the package's own 'system' default — Theme.tsx's old AsyncStorage-backed version already
+// left at the package's own 'system' default - Theme.tsx's old AsyncStorage-backed version already
 // defaulted a fresh install to dark, and this preserves that exact behavior. This slice's own color
-// is just a boot-seed placeholder for the live theme (Theme.tsx) — the real "what to remember for
+// is just a boot-seed placeholder for the live theme (Theme.tsx) - the real "what to remember for
 // next time" memory is seatColorsSlice's lastGuestColor/lastCpuColor below, so this being persisted
 // unconditionally on every theme change (including a profile seat's transient repaint) is harmless;
 // it's never read back as an input to guest/CPU/profile color resolution (see loadout.tsx).
@@ -52,7 +52,7 @@ const rootReducer = combineReducers({
   sound: appSoundReducer,
   // The shared App Group roster (see @tastic/profile's resolveInitialProfiles/
   // useSharedProfilesSync, wired in hooks/useProfiles.tsx) is layered on top of this as a separate
-  // sync target — this slice persisting normally via redux-persist, same as every other key here,
+  // sync target - this slice persisting normally via redux-persist, same as every other key here,
   // is what gives it local-fallback behavior for the platforms/builds where the shared store isn't
   // available, with no separate hand-rolled AsyncStorage path needed for that case.
   profiles: profilesReducer,
@@ -75,7 +75,7 @@ const persistConfig = {
   // redux-persist defaults `timeout` to 5000ms: a failsafe setTimeout scheduled on every PERSIST
   // dispatch to force-resolve rehydrate if storage never responds. It's never cleared once
   // rehydrate resolves normally (only guarded by an internal `_sealed` flag), so it sits as a
-  // pending timer for up to 5s after every store creation — under Jest that's a real open handle
+  // pending timer for up to 5s after every store creation - under Jest that's a real open handle
   // ("A worker process has failed to exit gracefully"), confirmed via `jest --detectOpenHandles`
   // pointing straight at persistReducer.js's setTimeout. Disabling it (falsy timeout skips the
   // setTimeout call entirely) is redux-persist's own documented way to opt out; AsyncStorage reads

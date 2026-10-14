@@ -10,7 +10,7 @@ import { applyMatchOutcome, applySoloOutcome, getProfileStatsView, MatchContext,
 export interface RecordMatchResult {
   // Device-wide newly-unlocked achievements (bare-id keyed).
   device: AchievementDefinition[]
-  // Per-seat breakdown of what that seat's OWN saved profile newly unlocked — only seats with a
+  // Per-seat breakdown of what that seat's OWN saved profile newly unlocked - only seats with a
   // profile selected ever get an entry.
   profiles: Partial<Record<Player, AchievementDefinition[]>>
 }
@@ -19,13 +19,13 @@ interface GameStatsContextValue {
   stats: StatsState
   unlockedAchievements: UnlockedAchievementsState
   recordMatchOutcome: (outcome: MatchOutcome, context: MatchContext) => RecordMatchResult
-  // Solo has no opponent/score-tuple shape to fit into MatchOutcome (see applySoloOutcome) — a
+  // Solo has no opponent/score-tuple shape to fit into MatchOutcome (see applySoloOutcome) - a
   // genuinely separate recorder, not a solo-shaped recordMatchOutcome call. profileId is singular
   // (not a per-seat map) since solo only ever has the one human seat; reuses RecordMatchResult's
-  // shape (profiles keyed by seat) so game.tsx's existing achievement-toast walk works unchanged —
+  // shape (profiles keyed by seat) so game.tsx's existing achievement-toast walk works unchanged -
   // solo only ever populates seat 1.
   recordSoloOutcome: (result: { cleared: boolean; bricksDestroyed: number }, profileId?: string) => RecordMatchResult
-  // Wipes both stored keys back to defaults — irreversible, so callers confirm with the player
+  // Wipes both stored keys back to defaults - irreversible, so callers confirm with the player
   // first (see achievements.tsx's reset confirmation).
   resetAll: () => void
   // Drops one profile's stats bucket and its unlock history, so a deleted profile leaves nothing

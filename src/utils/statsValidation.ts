@@ -6,10 +6,10 @@ import { AiDifficulty, BallSpeedLevel, MatchRecord, PointTotals, ProfileStats, S
 // @react-native-async-storage/async-storage, which throws at import time under Jest's plain Node
 // environment.
 
-// Each bucket is built by its own factory function, not a plain module constant — DEFAULT_PROFILE_STATS
+// Each bucket is built by its own factory function, not a plain module constant - DEFAULT_PROFILE_STATS
 // and DEFAULT_STATS below each need their own independent objects, not two references to the same
 // one (every consumer only ever spreads/reads these today, but a shared reference is a standing
-// invitation for a future in-place mutation to corrupt both at once — see DEFAULT_STATS' own doc).
+// invitation for a future in-place mutation to corrupt both at once - see DEFAULT_STATS' own doc).
 function createDefaultVsCpu(): VsCpuStats {
   return {
     ...DEFAULT_OUTCOME_RECORD,
@@ -42,7 +42,7 @@ function createDefaultBySpeed(): Record<BallSpeedLevel, MatchRecord> {
   }
 }
 
-// A fresh profile's starting bucket — same zeroed vsCpu/twoPlayer/points/bySpeed shape as
+// A fresh profile's starting bucket - same zeroed vsCpu/twoPlayer/points/bySpeed shape as
 // DEFAULT_STATS' own top-level fields, since ProfileStats mirrors StatsState's decomposable parts
 // (see types/index.ts).
 export const DEFAULT_PROFILE_STATS: ProfileStats = {
@@ -58,7 +58,7 @@ export const DEFAULT_PROFILE_STATS: ProfileStats = {
 }
 
 // vsCpu/twoPlayer/solo/points/bySpeed are re-created here rather than spread straight from
-// DEFAULT_PROFILE_STATS, specifically so the two don't end up aliasing the same nested objects —
+// DEFAULT_PROFILE_STATS, specifically so the two don't end up aliasing the same nested objects -
 // see createDefaultVsCpu's own doc above. shutouts/bestWinMargin/bricksDestroyed/the
 // DEFAULT_DAY_STREAK fields are plain numbers/strings, so aliasing them via the spread below is
 // harmless.

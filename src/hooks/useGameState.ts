@@ -7,13 +7,13 @@ import { buildSharedBrickField, buildSoloBrickField, centerBall, centerPaddle, c
 import { bricksActiveFor } from '@/utils/gameMode'
 import { applyBrickCollision, applyPaddleCollision, clampPaddleSpeed, computePaddleVelocity, computeServeVelocity, computeTickSubsteps, stepPhysics } from '@/utils/physics'
 
-// setPaddleTarget's public signature simplifies from AirHockey's (player, x, y) to (player, y) —
+// setPaddleTarget's public signature simplifies from AirHockey's (player, x, y) to (player, y) -
 // a Pong paddle's X is permanently fixed by board.paddleX[player] for the whole match, so there's
 // nothing left for a live input to ever set it to. paddleTargetsRef mirrors that: bare Y values,
 // not {x, y} points.
 type PaddleTargets = Record<Player, number>
 
-// TICK's own random is only ever consulted for brick-bounce jitter (see applyBrickCollision) —
+// TICK's own random is only ever consulted for brick-bounce jitter (see applyBrickCollision) -
 // optional and Math.random-defaulted the same way START/POINT_SERVE's already are, so tests can
 // inject determinism without the live useGameLoop dispatch needing to pass anything explicit.
 type Action = { type: 'TICK'; board: BoardLayout; dt: number; targets: PaddleTargets; random?: () => number } | { type: 'START'; random?: () => number } | { type: 'POINT_SERVE'; board: BoardLayout; random?: () => number } | { type: 'RESET'; board: BoardLayout } | { type: 'RESCALE'; prevBoard: BoardLayout; board: BoardLayout }
@@ -25,7 +25,7 @@ function makeInitialState(board: BoardLayout, mode: GameMode, bricksActive: bool
   return {
     phase: 'idle',
     scores: [0, 0],
-    // speed: 0 — unlike AirHockey's puck (which also legitimately sits at rest pre-START), Pong's
+    // speed: 0 - unlike AirHockey's puck (which also legitimately sits at rest pre-START), Pong's
     // ball genuinely gets launched by START itself (see the 'START' case below), so a resting
     // speed of 0 here is momentary by design, not a steady state anything else needs to handle.
     ball: { ...ballPos, vx: 0, vy: 0, speed: 0 },
@@ -37,9 +37,9 @@ function makeInitialState(board: BoardLayout, mode: GameMode, bricksActive: bool
   }
 }
 
-// Commits one player's paddle from its raw target Y into a real, velocity-bearing PaddleState —
+// Commits one player's paddle from its raw target Y into a real, velocity-bearing PaddleState -
 // an EMA over the instantaneous per-tick velocity, same technique AirHockey's own commitPaddle
-// uses (see its own doc comment for the full rationale). targetX is never a live input here — it's
+// uses (see its own doc comment for the full rationale). targetX is never a live input here - it's
 // always board.paddleX[player], read fresh each commit so a mid-rally RESCALE's new fixed X is
 // picked up automatically on the very next TICK, with no separate reconciliation step needed.
 function commitPaddle(prev: PaddleState, targetY: number, board: BoardLayout, player: Player, dt: number): PaddleState {
@@ -55,7 +55,7 @@ function otherPlayer(p: Player): Player {
 }
 
 // Board-change remap, split into a ball-specific and a paddle-specific half rather than one
-// generic rescalePoint the way AirHockey's single function handles both puck and paddle — a Pong
+// generic rescalePoint the way AirHockey's single function handles both puck and paddle - a Pong
 // paddle's X is fixed geometry, not a live coordinate, so it must SNAP to the new board's own
 // paddleX[player] rather than fractionally interpolate from wherever it happened to be (fractional
 // interpolation would leave it off the fixed line the moment the board's own aspect ratio changed
@@ -67,9 +67,9 @@ function rescaleBall(ball: BallState, prevBoard: BoardLayout, board: BoardLayout
   const fy = degenerate ? 0.5 : (ball.y - prevBoard.y) / prevBoard.height
   const vx = ball.vx * (degenerate ? 1 : board.width / prevBoard.width)
   const vy = ball.vy * (degenerate ? 1 : board.height / prevBoard.height)
-  // speed is recomputed from the rescaled vx/vy rather than carried forward unchanged — a resize
+  // speed is recomputed from the rescaled vx/vy rather than carried forward unchanged - a resize
   // isn't a "hit" (applyPaddleCollision's own ratchet never runs here), but the rescaled vx/vy's
-  // own magnitude genuinely did just change, so speed (the ratchet's source of truth — see
+  // own magnitude genuinely did just change, so speed (the ratchet's source of truth - see
   // BallState's doc comment in types/index.ts) has to track that or the two would silently drift
   // apart from each other.
   return { x: board.x + fx * board.width, y: board.y + fy * board.height, vx, vy, speed: Math.hypot(vx, vy) }
@@ -91,9 +91,9 @@ export function makeReducer(scoreToWin: number, ballSpeedLevel: BallSpeedLevel, 
       // idle -> live: the pre-game "get ready" beat, same pause POINT_SERVE gives after a point
       // (see useGameState's own effect below). Unlike AirHockey's own START (which only has to
       // flip the phase, since the puck legitimately sits at rest until struck), Pong's ball has no
-      // such mechanic — this is the very first thing that ever puts it in motion, via
+      // such mechanic - this is the very first thing that ever puts it in motion, via
       // computeServeVelocity with towardPlayer: null (a coin-flip direction, since neither player
-      // has conceded anything yet). Solo has no "neither player" — always serve toward 2 (rightward,
+      // has conceded anything yet). Solo has no "neither player" - always serve toward 2 (rightward,
       // away from paddle 1) so the opening serve heads into the brick field rather than sometimes
       // serving straight back at the player.
       case 'START': {
@@ -107,13 +107,13 @@ export function makeReducer(scoreToWin: number, ballSpeedLevel: BallSpeedLevel, 
 
         const paddles = {
           1: commitPaddle(state.paddles[1], action.targets[1], action.board, 1, action.dt),
-          // Committed unconditionally even in solo — harmless (paddle 2 is never collided against
+          // Committed unconditionally even in solo - harmless (paddle 2 is never collided against
           // or rendered there), and simpler than special-casing it out of a shape every other
           // action already assumes exists.
           2: commitPaddle(state.paddles[2], action.targets[2], action.board, 2, action.dt)
         }
 
-        // Substepping lives HERE, not inside stepPhysics itself (unlike AirHockey) — each substep
+        // Substepping lives HERE, not inside stepPhysics itself (unlike AirHockey) - each substep
         // needs its own fresh applyPaddleCollision check against a thin paddle bar, not just wall
         // integration, so the loop has to live at the layer that already owns both paddles' state.
         const substeps = computeTickSubsteps(state.ball.speed, action.dt, action.board.paddleWidth)
@@ -126,7 +126,7 @@ export function makeReducer(scoreToWin: number, ballSpeedLevel: BallSpeedLevel, 
 
         for (let i = 0; i < substeps; i++) {
           ball = applyPaddleCollision(ball, paddles[1], action.board, tier.increment, tier.max)
-          // Solo has no second paddle to collide against — the far edge is a wall instead (see
+          // Solo has no second paddle to collide against - the far edge is a wall instead (see
           // farEdgeIsWall below).
           if (!isSolo) ball = applyPaddleCollision(ball, paddles[2], action.board, tier.increment, tier.max)
 
@@ -139,12 +139,12 @@ export function makeReducer(scoreToWin: number, ballSpeedLevel: BallSpeedLevel, 
             }
           }
 
-          // Wall-bounce jitter only when bricksActive — see stepPhysics' own doc: classic Pong's
+          // Wall-bounce jitter only when bricksActive - see stepPhysics' own doc: classic Pong's
           // wall bounces stay exactly as deterministic as they've always been otherwise.
           const result = stepPhysics(ball, action.board, subDt, isSolo, bricksActive ? action.random : undefined)
           anyBounced = anyBounced || result.bounced
           ball = { x: result.x, y: result.y, vx: result.vx, vy: result.vy, speed: result.speed }
-          // A score is final — stop sub-stepping immediately rather than continuing to integrate a
+          // A score is final - stop sub-stepping immediately rather than continuing to integrate a
           // ball that's already left play this frame, same discipline AirHockey's own stepPhysics
           // substep loop uses for a scored/stopped puck.
           if (result.scored !== null) {
@@ -161,14 +161,14 @@ export function makeReducer(scoreToWin: number, ballSpeedLevel: BallSpeedLevel, 
         }
 
         if (scoredBy !== null) {
-          // At rest, dead center — the actual re-launch happens on the FOLLOWING POINT_SERVE, once
+          // At rest, dead center - the actual re-launch happens on the FOLLOWING POINT_SERVE, once
           // SERVE_PAUSE_MS has given both players a beat to see the score change (see
-          // useGameState's own effect below). speed: 0 here, not tier.base — a scored ball isn't
+          // useGameState's own effect below). speed: 0 here, not tier.base - a scored ball isn't
           // "in play" again until POINT_SERVE actually serves it.
           const nextBall: BallState = { ...centerBall(action.board), vx: 0, vy: 0, speed: 0 }
 
           if (isSolo) {
-            // scoredBy is always 2 in solo (farEdgeIsWall means P2's edge never scores) — i.e. a
+            // scoredBy is always 2 in solo (farEdgeIsWall means P2's edge never scores) - i.e. a
             // miss, not an opponent's point. lastScoredBy stays 1 regardless so POINT_SERVE's
             // otherPlayer(lastScoredBy) still resolves to 2, correctly serving away from the player
             // and into the field, with no mode-branching needed inside POINT_SERVE itself.
@@ -188,9 +188,9 @@ export function makeReducer(scoreToWin: number, ballSpeedLevel: BallSpeedLevel, 
         return { ...state, ball, paddles, bricks, bounceCount: anyBounced ? state.bounceCount + 1 : state.bounceCount }
       }
 
-      // Post-point re-serve — see useGameState's own SERVE_PAUSE_MS timer. Re-centers both
+      // Post-point re-serve - see useGameState's own SERVE_PAUSE_MS timer. Re-centers both
       // paddles (real Pong re-serves fresh, no possession/turn logic to carry over) and serves the
-      // ball toward whoever just conceded (otherPlayer(lastScoredBy) — the scorer doesn't also get
+      // ball toward whoever just conceded (otherPlayer(lastScoredBy) - the scorer doesn't also get
       // to receive their own serve).
       case 'POINT_SERVE': {
         if (state.phase !== 'pointScored') return state
@@ -229,7 +229,7 @@ export function useGameState(board: BoardLayout, scoreToWin: number, ballSpeedLe
   // reset `state` back to its initializer whenever scoreToWin/ballSpeedLevel changed).
   const reducerRef = useRef(makeReducer(scoreToWin, ballSpeedLevel, mode, bricksEnabled))
   // An effect (no dependency array, so it reruns after every render) rather than a bare
-  // `.current =` assignment in the component body — matching BoxHockey's own identical reducerRef
+  // `.current =` assignment in the component body - matching BoxHockey's own identical reducerRef
   // in its useGameState.ts: React may render a component more than once for a single commit (e.g.
   // under StrictMode or a Suspense retry) without every one of those renders actually reaching the
   // device, so a bare render-time write here could mirror in a stale/discarded reducer; an effect
@@ -250,18 +250,18 @@ export function useGameState(board: BoardLayout, scoreToWin: number, ballSpeedLe
 
   const boardRef = useRef(board)
   // Mirrored every render so the physics rAF loop below always reads the current board layout
-  // without needing it in that effect's own deps — an effect (no dependency array) rather than a
+  // without needing it in that effect's own deps - an effect (no dependency array) rather than a
   // bare render-time assignment, same reasoning as reducerRef's own comment above and matching
   // BoxHockey's identical boardRef.
   useEffect(() => {
     boardRef.current = board
   })
 
-  // Raw, unthrottled paddle target Ys — written every touch sample (TouchInputLayer) or AI
+  // Raw, unthrottled paddle target Ys - written every touch sample (TouchInputLayer) or AI
   // decision (useAIOpponent) via setPaddleTarget below, WITHOUT dispatching (a dispatch per touch
   // sample would re-render well over 60 times a second on some devices). The physics tick reads
-  // whatever this ref currently holds once per animation frame — the same cadence stepPhysics
-  // itself runs at — and folds the read into the SAME TICK dispatch that also steps the ball, so a
+  // whatever this ref currently holds once per animation frame - the same cadence stepPhysics
+  // itself runs at - and folds the read into the SAME TICK dispatch that also steps the ball, so a
   // player's and the AI's target both flow through this identical commit path (see commitPaddle
   // above). Same pattern as AirHockey's own paddleTargetsRef, just bare Ys instead of {x, y}
   // points.
@@ -275,12 +275,12 @@ export function useGameState(board: BoardLayout, scoreToWin: number, ballSpeedLe
   useGameLoop((dt) => dispatch({ type: 'TICK', board: boardRef.current, dt, targets: paddleTargetsRef.current }), { enabled: state.phase === 'live' && !paused, maxDt: 2.5 })
 
   // useReducer's lazy init (the `board` argument passed to useReducer above) only ever runs ONCE,
-  // at this hook's very first mount — but `board` itself can change again at any later point too:
+  // at this hook's very first mount - but `board` itself can change again at any later point too:
   // useSafeAreaInsets/useOrientationState both resolve asynchronously after game.tsx's
   // first paint, a live window resize can fire at any time, and rotating the device mid-rally
   // genuinely changes which real dimensions feed computeBoardLayout. Rescaling on every board
   // change (see rescaleBall/rescalePaddleY above), not just while idle, is what actually keeps the
-  // ball/paddles' absolute-pixel positions sane across all of those — including the pre-game
+  // ball/paddles' absolute-pixel positions sane across all of those - including the pre-game
   // settling window, where it's simply invisible since nothing's moved yet. Mirrors AirHockey's own
   // identical effect.
   const prevBoardRef = useRef(board)
@@ -289,7 +289,7 @@ export function useGameState(board: BoardLayout, scoreToWin: number, ballSpeedLe
     if (board === prevBoard) return
     prevBoardRef.current = board
     // A degenerate zero-sized prevBoard (web's very first render, before hydration has a real
-    // window size to measure) can only ever be true right at mount — real gameplay can't have
+    // window size to measure) can only ever be true right at mount - real gameplay can't have
     // happened against a board with 0 width. Re-centering fresh (each point at its OWN correct
     // spot) rather than fractionally rescaling from it is what actually matters here: rescaleBall/
     // rescalePaddleY both treat a degenerate prevBoard as "everything was at the 0.5,0.5 fraction"
@@ -308,7 +308,7 @@ export function useGameState(board: BoardLayout, scoreToWin: number, ballSpeedLe
   }, [board])
 
   // Owns the idle->live and pointScored->live pauses itself, rather than pushing timer bookkeeping
-  // out to game.tsx — this is the game's own internal rhythm, not something the screen layer needs
+  // out to game.tsx - this is the game's own internal rhythm, not something the screen layer needs
   // to orchestrate. Re-runs (and so restarts the pause from scratch) whenever `paused` toggles, so
   // a settings/quit-confirm dialog opened mid-pause doesn't let the ball go live off a stale timer
   // that counted time the dialog was covering the board. Mirrors AirHockey's own identical effect.

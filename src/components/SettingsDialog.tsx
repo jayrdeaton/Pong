@@ -20,7 +20,7 @@ export interface SettingsDialogProps {
   showHowToPlay?: boolean
 }
 
-// Thin adapter over @tastic/hud's shared settings shell — Pong's own Settings (lock
+// Thin adapter over @tastic/hud's shared settings shell - Pong's own Settings (lock
 // orientation, edge guard) is the only thing that varies here; everything else (sound, haptics,
 // appearance, update checking) is identical across every app using BaseSettingsDialog and lives
 // entirely inside that package now. Keeps this file's own external props stable across its three

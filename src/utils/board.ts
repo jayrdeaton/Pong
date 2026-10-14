@@ -4,7 +4,7 @@ import { EdgeInsets } from 'react-native-safe-area-context'
 import { BALL_RADIUS_RATIO, BRICK_GAP_RATIO, DESKTOP_WEB_MIN_WIDTH, PADDLE_HEIGHT_RATIOS, PADDLE_INSET_RATIO, PADDLE_WIDTH_RATIO, SHARED_BRICK_COLS, SHARED_BRICK_FIELD_WIDTH_RATIO, SHARED_BRICK_FIELD_Y_MARGIN_RATIO, SHARED_BRICK_ROWS, SOLO_BRICK_COLS, SOLO_BRICK_FIELD_X_END_RATIO, SOLO_BRICK_FIELD_X_START_RATIO, SOLO_BRICK_FIELD_Y_MARGIN_RATIO, SOLO_BRICK_ROWS, TABLE_WIDTH_TO_HEIGHT_RATIO, WALL_THICKNESS } from '@/constants/game'
 import { BoardLayout, Brick, PaddleSizeLevel, Player } from '@/types'
 
-// Mirrors AirHockey's own isDesktopLayout — desktop web is the only context that fixes the board
+// Mirrors AirHockey's own isDesktopLayout - desktop web is the only context that fixes the board
 // to a fixed aspect ratio (TABLE_WIDTH_TO_HEIGHT_RATIO) rather than filling the viewport exactly.
 // Native and mobile web fill their container exactly, so the device's own physical edge already
 // reads as the boundary with zero gap.
@@ -16,10 +16,10 @@ export function computeViewportSize(screenWidth: number, screenHeight: number, i
   return { width: screenWidth - insets.left - insets.right, height: screenHeight - insets.top - insets.bottom }
 }
 
-// No goalAxis/rotation parameter at all — unlike AirHockey's computeBoardLayout, board/physics/AI
+// No goalAxis/rotation parameter at all - unlike AirHockey's computeBoardLayout, board/physics/AI
 // stay in canonical local space always (paddles at local-left/local-right, ball travels along
 // local X). The rendering layer (game.tsx) is what rotates this local space onto the real screen
-// via @tastic/split-screen's getFixedZoneRotation — see the design spec's note below — this
+// via @tastic/split-screen's getFixedZoneRotation - see the design spec's note below - this
 // function never needs to know about real device orientation; game.tsx alone decides which real
 // width/height to feed it based on the live orientationMode.
 export function computeBoardLayout(screenWidth: number, screenHeight: number, insets: EdgeInsets, paddleSize: PaddleSizeLevel = 'medium'): BoardLayout {
@@ -70,7 +70,7 @@ export function centerPaddle(board: BoardLayout, player: Player): { x: number; y
 
 // The full equivalent of AirHockey's clampToOwnHalf, just narrower: a Pong paddle only ever moves
 // on Y (its X is permanently fixed by board.paddleX), and it covers the full court height rather
-// than half of it — there's no "own half" concept left once nothing behind the paddle needs
+// than half of it - there's no "own half" concept left once nothing behind the paddle needs
 // defending. Shared by TouchInputLayer's setPaddleTarget (a human's live drag) and aiOpponent's
 // target selection, same as AirHockey.
 export function clampPaddleY(y: number, board: BoardLayout): number {
@@ -80,7 +80,7 @@ export function clampPaddleY(y: number, board: BoardLayout): number {
 // Evenly divides [x0,x1]×[y0,y1] into a cols×rows grid, each cell inset by `gap` (split evenly on
 // both sides) so neighboring bricks never touch. x/y are top-left corners, matching @tastic/
 // physics's circleVsRect and ObstacleRect's own rect convention (not center-based, unlike a paddle
-// rect — see applyPaddleCollision's own center-to-corner conversion in utils/physics.ts).
+// rect - see applyPaddleCollision's own center-to-corner conversion in utils/physics.ts).
 function packBrickGrid(x0: number, y0: number, x1: number, y1: number, cols: number, rows: number, gap: number): Omit<Brick, 'destroyed'>[] {
   const cellWidth = (x1 - x0) / cols
   const cellHeight = (y1 - y0) / rows
@@ -95,7 +95,7 @@ function packBrickGrid(x0: number, y0: number, x1: number, y1: number, cols: num
   return bricks
 }
 
-// Full-court field for solo/Brickbreaker — leaves runway near paddle 1 and a margin before the far
+// Full-court field for solo/Brickbreaker - leaves runway near paddle 1 and a margin before the far
 // wall, rather than spanning edge to edge.
 export function buildSoloBrickField(board: BoardLayout): Brick[] {
   const gap = board.height * BRICK_GAP_RATIO
@@ -119,7 +119,7 @@ export function buildSharedBrickField(board: BoardLayout): Brick[] {
   return packBrickGrid(x0, y0, x1, y1, SHARED_BRICK_COLS, SHARED_BRICK_ROWS, gap).map((b) => ({ ...b, destroyed: false }))
 }
 
-// Board-change remap for bricks — same fractional-remap technique as useGameState.ts's own
+// Board-change remap for bricks - same fractional-remap technique as useGameState.ts's own
 // rescaleBall (kept here rather than there since it's pure board-geometry math, no game-state
 // concerns). destroyed carries straight through unchanged; only geometry is remapped.
 export function rescaleBricks(bricks: Brick[], prevBoard: BoardLayout, board: BoardLayout): Brick[] {
@@ -139,7 +139,7 @@ export function rescaleBricks(bricks: Brick[], prevBoard: BoardLayout, board: Bo
 // passed straight through). When 'faceToFace', the container hosting the board+TouchInputLayer
 // tree is rotated 90°/-90° via getFixedZoneRotation, and computeBoardLayout must be called with
 // the SWAPPED dimensions (screenHeight passed as screenWidth and vice versa) so the local rect
-// still comes out sized correctly for its own rotated container — mirrors AirHockey's original
+// still comes out sized correctly for its own rotated container - mirrors AirHockey's original
 // computeLocalContainerSize's short/long swap, just resolved one level up in game.tsx rather than
 // inside board.ts itself (board.ts stays orientation-agnostic; game.tsx decides which real
 // width/height to feed it based on live orientationMode).

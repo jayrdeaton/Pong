@@ -15,7 +15,7 @@ function play(prev: StatsState, outcome: MatchOutcome, context: MatchContext = V
   return applyMatchOutcome(prev, outcome, context, now)
 }
 
-describe('applyMatchOutcome — vsCpu', () => {
+describe('applyMatchOutcome - vsCpu', () => {
   it('records a human win without touching twoPlayer', () => {
     const s = play(DEFAULT_STATS, win([7, 3]))
     expect(s.vsCpu).toMatchObject({ played: 1, wins: 1, losses: 0 })
@@ -44,7 +44,7 @@ describe('applyMatchOutcome — vsCpu', () => {
   })
 })
 
-describe('applyMatchOutcome — goals, shutouts and margins', () => {
+describe('applyMatchOutcome - goals, shutouts and margins', () => {
   it('accumulates goals for and against from seat 1s perspective', () => {
     let s = play(DEFAULT_STATS, win([7, 3]))
     s = play(s, win([2, 7]))
@@ -69,7 +69,7 @@ describe('applyMatchOutcome — goals, shutouts and margins', () => {
   })
 })
 
-describe('applyMatchOutcome — ball speed', () => {
+describe('applyMatchOutcome - ball speed', () => {
   it('buckets each speed tier separately', () => {
     let s = play(DEFAULT_STATS, win([7, 0]), { ...VS_CPU, ballSpeed: 'fast' })
     s = play(s, win([1, 7]), { ...VS_CPU, ballSpeed: 'slow' })
@@ -89,7 +89,7 @@ describe('applyMatchOutcome — ball speed', () => {
   })
 })
 
-describe('applyMatchOutcome — twoPlayer seats', () => {
+describe('applyMatchOutcome - twoPlayer seats', () => {
   it('records seat wins without touching vsCpu', () => {
     const s = play(DEFAULT_STATS, win([7, 5]), TWO_PLAYER)
     expect(s.twoPlayer).toEqual({ played: 1, p1Wins: 1, p2Wins: 0 })
@@ -102,7 +102,7 @@ describe('applyMatchOutcome — twoPlayer seats', () => {
   })
 })
 
-describe('applyMatchOutcome — profiles', () => {
+describe('applyMatchOutcome - profiles', () => {
   const withProfiles: MatchContext = { ...TWO_PLAYER, profileIds: { 1: 'alice', 2: 'bob' } }
 
   it('leaves profiles untouched when no ids are supplied', () => {
@@ -212,7 +212,7 @@ describe('applySoloOutcome', () => {
     expect(applySoloOutcome(DEFAULT_STATS, { cleared: false, bricksDestroyed: 0 }, undefined).firstGameResult).toBe('loss')
   })
 
-  it("a solo debut's firstGameResult is never later overwritten by a non-solo match — the two paths share one first-ever check", () => {
+  it("a solo debut's firstGameResult is never later overwritten by a non-solo match - the two paths share one first-ever check", () => {
     let s = applySoloOutcome(DEFAULT_STATS, { cleared: false, bricksDestroyed: 5 }, undefined)
     expect(s.firstGameResult).toBe('loss')
     s = play(s, win([7, 1]), VS_CPU)
@@ -220,7 +220,7 @@ describe('applySoloOutcome', () => {
   })
 })
 
-describe('applyMatchOutcome — bricksDestroyed context (vsCpu/twoPlayer Bricks toggle)', () => {
+describe('applyMatchOutcome - bricksDestroyed context (vsCpu/twoPlayer Bricks toggle)', () => {
   it('folds an optional bricksDestroyed count into the shared, mode-agnostic counter', () => {
     expect(play(DEFAULT_STATS, win([7, 1]), { ...VS_CPU, bricksDestroyed: 15 }).bricksDestroyed).toBe(15)
   })

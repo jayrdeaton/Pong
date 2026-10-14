@@ -3,7 +3,7 @@ import { createAchievementBindings } from '@tastic/achievements'
 import { ACHIEVEMENT_CATALOG } from '@/constants/achievements'
 import { getProfileStatsView } from '@/utils/statsEngine'
 
-// Thin Pong-side bindings over @tastic/achievements' generic createAchievementBindings factory —
+// Thin Pong-side bindings over @tastic/achievements' generic createAchievementBindings factory -
 // the catalog and getProfileStatsView are module-level constants here, so pre-binding them keeps
 // call sites reading as `evaluateUnlockedIds(stats)`/`evaluateUnlockedIdsForProfile(profileStats)`
 // rather than threading them through by hand. Same three export names this file has always had, so

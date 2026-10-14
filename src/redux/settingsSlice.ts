@@ -18,7 +18,7 @@ export const DEFAULT_SETTINGS: Settings = {
   lockOrientation: false,
   deferBottomEdgeGestures: false,
   // Asymmetric defaults (not both 'mouse') so two seats sharing one desktop's keyboard/mouse don't
-  // start out colliding — mirrors Snake's identical reasoning for the same field.
+  // start out colliding - mirrors Snake's identical reasoning for the same field.
   controlScheme: { 1: 'mouse', 2: 'wasd' },
   tiltControlEnabled: false
 }

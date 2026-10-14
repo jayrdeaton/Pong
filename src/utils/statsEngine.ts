@@ -4,7 +4,7 @@ import { Profile } from '@tastic/profile'
 import { AiDifficulty, BallSpeedLevel, GameMode, Player, ProfileStats, SoloStats, StatsState } from '@/types'
 import { DEFAULT_PROFILE_STATS } from '@/utils/statsValidation'
 
-// One finished match, as the stats layer sees it — built by game.tsx the instant phase flips to
+// One finished match, as the stats layer sees it - built by game.tsx the instant phase flips to
 // 'gameOver', entirely from state that's already on screen.
 export interface MatchOutcome {
   winner: Player
@@ -19,13 +19,13 @@ export interface MatchContext {
   // Seat -> profile id, present only for seats with a saved profile selected. vsCpu's CPU seat
   // never has one, so the loop below only ever bumps the human's.
   profileIds?: Partial<Record<Player, string>>
-  // Only meaningful for the vsCpu/twoPlayer Bricks toggle — folded into the same mode-agnostic
+  // Only meaningful for the vsCpu/twoPlayer Bricks toggle - folded into the same mode-agnostic
   // ProfileStats.bricksDestroyed counter solo also feeds (see applySoloOutcome), purely additive
   // and otherwise doesn't touch this outcome's win-condition/scores handling at all.
   bricksDestroyed?: number
 }
 
-// Pong has no draws — a match ends the instant one side reaches scoreToWin — so this only ever
+// Pong has no draws - a match ends the instant one side reaches scoreToWin - so this only ever
 // returns 'win' or 'loss'. Routed through resultFor so the rule lives in one place.
 function seatResult(outcome: MatchOutcome, seat: Player): RoundResult {
   return resultFor(outcome.winner, seat)
@@ -62,7 +62,7 @@ function bumpForSeat(prev: ProfileStats, outcome: MatchOutcome, context: MatchCo
   return {
     vsCpu,
     twoPlayer,
-    // Untouched by a two-paddle match outcome — only applySoloOutcome's own bumpSoloForSeat below
+    // Untouched by a two-paddle match outcome - only applySoloOutcome's own bumpSoloForSeat below
     // ever changes this bucket.
     solo: prev.solo,
     points: { scored: prev.points.scored + scored, conceded: prev.points.conceded + conceded },
@@ -74,7 +74,7 @@ function bumpForSeat(prev: ProfileStats, outcome: MatchOutcome, context: MatchCo
   }
 }
 
-// Solo's own bump, parallel to bumpForSeat above rather than routed through it — solo has no
+// Solo's own bump, parallel to bumpForSeat above rather than routed through it - solo has no
 // opponent/score-tuple shape (MatchOutcome/MatchContext) to fit into, just a cleared/bricksDestroyed
 // result.
 function bumpSoloForSeat(prev: ProfileStats, result: { cleared: boolean; bricksDestroyed: number }, now: Date): ProfileStats {
@@ -82,7 +82,7 @@ function bumpSoloForSeat(prev: ProfileStats, result: { cleared: boolean; bricksD
   return { ...prev, solo, bricksDestroyed: prev.bricksDestroyed + result.bricksDestroyed, ...applyDayPlayed(prev, now) }
 }
 
-// `now` defaults to the real clock — overridable so tests can drive day boundaries directly.
+// `now` defaults to the real clock - overridable so tests can drive day boundaries directly.
 export function applyMatchOutcome(prev: StatsState, outcome: MatchOutcome, context: MatchContext, now: Date = new Date()): StatsState {
   // + prev.solo.played: a device's very first game ever being a SOLO round must still count as
   // "first ever" here, or a later non-solo game would wrongly re-treat itself as the debut (see
@@ -103,7 +103,7 @@ export function applyMatchOutcome(prev: StatsState, outcome: MatchOutcome, conte
   return { ...base, profiles, firstGameResult }
 }
 
-// Solo's own outcome recorder, parallel to applyMatchOutcome above rather than routed through it —
+// Solo's own outcome recorder, parallel to applyMatchOutcome above rather than routed through it -
 // see bumpSoloForSeat's own doc for why. profileId is singular (not a per-seat map) since solo only
 // ever has the one human seat.
 export function applySoloOutcome(prev: StatsState, result: { cleared: boolean; bricksDestroyed: number }, profileId: string | undefined, now: Date = new Date()): StatsState {
@@ -127,13 +127,13 @@ export function getOverallTotals(stats: ProfileStats): { played: number; wins: n
 }
 
 // Synthesizes a full StatsState-shaped view from one profile's bucket, so the same predicates
-// evaluate it unchanged. firstGameResult is never read through this view — the one achievement
+// evaluate it unchanged. firstGameResult is never read through this view - the one achievement
 // that touches it is scope:'device'.
 export function getProfileStatsView(profileStats: ProfileStats): StatsState {
   return { ...profileStats, profiles: {}, firstGameResult: null }
 }
 
-// How many of the three ball-speed tiers have at least one win — the "win at every speed" family.
+// How many of the three ball-speed tiers have at least one win - the "win at every speed" family.
 export function getSpeedsWon(stats: ProfileStats): number {
   return countBucketsWithAWin(stats.bySpeed)
 }
@@ -146,7 +146,7 @@ export interface ProfileRanking {
   winRate: number
 }
 
-// Sorted by wins then win rate, both descending — a profile with nothing recorded still appears at
+// Sorted by wins then win rate, both descending - a profile with nothing recorded still appears at
 // played: 0, so a freshly created one shows up immediately.
 export function getProfileRankings(profiles: Profile[], profileStats: Record<string, ProfileStats>): ProfileRanking[] {
   return profiles

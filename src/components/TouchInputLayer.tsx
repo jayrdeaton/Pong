@@ -10,19 +10,19 @@ export interface TouchInputLayerProps {
   // their own input area (see the solo branch below) rather than half of it.
   humanPlayers: Player[]
   enabled: boolean
-  // The LOCAL (pre-rotation) container's own height — the same value game.tsx feeds as
+  // The LOCAL (pre-rotation) container's own height - the same value game.tsx feeds as
   // computeBoardLayout's own screenHeight/screenWidth arg (whichever ends up "height" after the
-  // orientation-driven swap — see game.tsx's own comment on containerWidth/containerHeight). Needed
+  // orientation-driven swap - see game.tsx's own comment on containerWidth/containerHeight). Needed
   // to convert a touch's real screen position back into the local Y board.ts's paddleMinY/paddleMaxY
-  // already assume — see screenToLocalY below.
+  // already assume - see screenToLocalY below.
   containerHeight: number
   // The SAME rotation game.tsx applies to the board's own container (0 for sideBySide, ±90 for
-  // faceToFace — see game.tsx's own doc comment on why this is the mirror image of
+  // faceToFace - see game.tsx's own doc comment on why this is the mirror image of
   // @tastic/split-screen's own getFixedZoneRotation/getViewRotation convention). Needed to invert a
   // touch's real e.absoluteX/absoluteY back into this same local space by hand, since RNGH does not
   // correct for an ancestor View's rotation on its own.
   rotation: 0 | 90 | -90
-  // Called with the LOCAL (board-space) Y only — a Pong paddle only ever moves on one axis (see
+  // Called with the LOCAL (board-space) Y only - a Pong paddle only ever moves on one axis (see
   // PaddleState's own doc comment in types/index.ts: x is permanently fixed by board.paddleX).
   onPaddleTargetY: (player: Player, y: number) => void
 }
@@ -30,7 +30,7 @@ export interface TouchInputLayerProps {
 // Converts a real screen-space touch position back into the local board's Y coordinate by hand,
 // using the exact inverse of the CSS rotation game.tsx applies to the board's own container.
 // Mirrors AirHockey's old screenToLocal technique (see AirHockey/src/components/TouchInputLayer.tsx)
-// — working from e.absoluteX/absoluteY (real, unambiguous screen position, independent of which
+// - working from e.absoluteX/absoluteY (real, unambiguous screen position, independent of which
 // transformed view the gesture is physically attached to) and inverting the KNOWN rotation
 // explicitly, rather than trusting RNGH's own e.x/e.y to have already accounted for an ancestor's
 // rotation (verified in AirHockey's own browser-preview testing that it does not). Only Y is
@@ -46,28 +46,28 @@ function screenToLocalY(absX: number, absY: number, screenCenterX: number, scree
   return containerHeight / 2 + ly
 }
 
-// Two independent single-finger Pan gestures, each on its OWN View — modeled directly on
+// Two independent single-finger Pan gestures, each on its OWN View - modeled directly on
 // AirHockey's TouchInputLayer, which deliberately does NOT use one shared view split via `hitSlop`:
 // two fingers landing in the same native touch batch (a genuine simultaneous two-player touch, not
 // two touches a few frames apart) raced on which recognizer claimed which pointer on a single
-// shared view, and lost one or both — a documented real bug. Two separate native views/recognizers
+// shared view, and lost one or both - a documented real bug. Two separate native views/recognizers
 // have nothing left to race.
 //
-// Zones split the UNROTATED real screen (not the rotated local board space) — deliberately, and
+// Zones split the UNROTATED real screen (not the rotated local board space) - deliberately, and
 // deliberately NOT always left/right: the split axis has to be whichever REAL axis stays
 // PERPENDICULAR to the direction local Y ends up mapping onto once rotation is applied, or roughly
 // half of each paddle's travel range becomes physically unreachable from its own zone. Concretely,
 // for rotation === 0 (sideBySide), local Y maps straight onto real Y, so the two zones split real X
-// (left/right — each paddle slides vertically within its own left-or-right half, the classic
+// (left/right - each paddle slides vertically within its own left-or-right half, the classic
 // side-by-side arrangement). For rotation === ±90 (faceToFace), local Y maps onto real X instead, so
-// the zones split real Y (top/bottom) — each paddle instead slides HORIZONTALLY within its own
+// the zones split real Y (top/bottom) - each paddle instead slides HORIZONTALLY within its own
 // top-or-bottom half. Root causes traced by hand: with rotation === 90, local-left (paddle 1's own
 // side) maps to a NEGATIVE real Y offset (near the screen's top), and rotation === -90 flips that to
-// the bottom — so "zone A" (whichever physical half is assigned first) is always paddle 1's zone,
+// the bottom - so "zone A" (whichever physical half is assigned first) is always paddle 1's zone,
 // and "zone B" is always paddle 2's, regardless of which real edge each one currently occupies.
 //
 // This part of the layout is a deliberate, worked-through departure from a plan note that described
-// the split as unconditionally left/right — see game.tsx's/this phase's own report for the full
+// the split as unconditionally left/right - see game.tsx's/this phase's own report for the full
 // reasoning (a literal always-left/right split leaves roughly half of each paddle's local-Y travel
 // range unreachable once rotation !== 0).
 export default function TouchInputLayer({ humanPlayers, enabled, containerHeight, rotation, onPaddleTargetY }: TouchInputLayerProps) {
@@ -75,8 +75,8 @@ export default function TouchInputLayer({ humanPlayers, enabled, containerHeight
   const { width: screenWidth, height: screenHeight } = useWindowDimensions()
 
   // Everything the gesture callbacks need, kept in a ref rather than closed over directly, so the
-  // callbacks — and therefore the Gesture objects built from them below — stay referentially stable
-  // across renders (a Gesture object rebuilt on every layout/state tick can silently drop touches —
+  // callbacks - and therefore the Gesture objects built from them below - stay referentially stable
+  // across renders (a Gesture object rebuilt on every layout/state tick can silently drop touches -
   // see AirHockey's own TouchInputLayer for the original repro).
   const latestRef = useRef({ onPaddleTargetY, screenWidth, screenHeight, containerHeight, rotation })
   useEffect(() => {
@@ -105,14 +105,14 @@ export default function TouchInputLayer({ humanPlayers, enabled, containerHeight
     [enabled, handleTouch]
   )
 
-  // makePlayerGesture only *builds* a Gesture chain here — the ref read it closes over (via
+  // makePlayerGesture only *builds* a Gesture chain here - the ref read it closes over (via
   // handleTouch, inside .onStart/.onUpdate) doesn't run until an actual touch fires, never during
   // this useMemo call itself. The linter can't trace that far through the gesture-builder closure,
-  // so it conservatively flags calling it from render — same false-positive class AirHockey's own
+  // so it conservatively flags calling it from render - same false-positive class AirHockey's own
   // TouchInputLayer documents for this exact "ref read inside a gesture-builder callback" shape.
   /* eslint-disable react-hooks/refs */
   const soloGesture = useMemo(() => (solo ? makePlayerGesture(humanPlayers[0]) : null), [solo, humanPlayers, makePlayerGesture])
-  // zoneA is always player 1's zone, zoneB always player 2's — see the file-level comment above for
+  // zoneA is always player 1's zone, zoneB always player 2's - see the file-level comment above for
   // why the physical half each one occupies (not the assignment itself) is what varies with rotation.
   const zoneAGesture = useMemo(() => (solo ? null : makePlayerGesture(1)), [solo, makePlayerGesture])
   const zoneBGesture = useMemo(() => (solo ? null : makePlayerGesture(2)), [solo, makePlayerGesture])
@@ -123,7 +123,7 @@ export default function TouchInputLayer({ humanPlayers, enabled, containerHeight
       <GestureDetector gesture={soloGesture!}>
         {/* collapsable={false}: without a prop that makes it stand out, RN's view-flattening
             optimization merges this plain View into its parent, and GestureDetector's ref then
-            attaches to nothing — the gesture silently never receives a single touch. */}
+            attaches to nothing - the gesture silently never receives a single touch. */}
         <View collapsable={false} style={styles.zoneFull} />
       </GestureDetector>
     )

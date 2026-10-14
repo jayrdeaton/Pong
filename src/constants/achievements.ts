@@ -5,14 +5,14 @@ import { getOverallTotals, getSpeedsWon } from '@/utils/statsEngine'
 
 export { ACHIEVEMENT_TIER_COLORS } from '@tastic/achievements'
 
-// Every tier in BallSpeedLevel — hardcoded rather than imported so this stays a dependency-light,
+// Every tier in BallSpeedLevel - hardcoded rather than imported so this stays a dependency-light,
 // Jest-safe constants file.
 const TOTAL_SPEED_TIERS = 3
 
 const AI_DIFFICULTY_TIER: Record<AiDifficulty, AchievementTier> = { easy: 'bronze', medium: 'silver', hard: 'gold' }
 const AI_DIFFICULTY_LABEL: Record<AiDifficulty, string> = { easy: 'Easy', medium: 'Medium', hard: 'Hard' }
 
-// Three different predicates, not one value against three thresholds — hand-written, with no
+// Three different predicates, not one value against three thresholds - hand-written, with no
 // `progress`, since a fraction of "beat Hard once" isn't meaningful.
 function beatCpuFamily(): AchievementDefinition[] {
   const titles: Record<AiDifficulty, string> = { easy: 'Warmed Up', medium: 'Contender', hard: 'Paddle Master' }
@@ -28,7 +28,7 @@ function beatCpuFamily(): AchievementDefinition[] {
 
 export const ACHIEVEMENT_CATALOG: AchievementDefinition[] = [
   { id: 'first_game_played', title: 'First Serve', description: 'Play your first match.', tier: 'bronze', icon: 'flag-checkered', isUnlocked: (stats) => getOverallTotals(stats).played >= 1 },
-  { id: 'first_ever_win', title: 'First Point', description: 'Win a match — any match, any time.', tier: 'bronze', icon: 'star', isUnlocked: (stats) => getOverallTotals(stats).wins >= 1 },
+  { id: 'first_ever_win', title: 'First Point', description: 'Win any match, any time.', tier: 'bronze', icon: 'star', isUnlocked: (stats) => getOverallTotals(stats).wins >= 1 },
   {
     id: 'flawless_debut',
     title: 'Natural',

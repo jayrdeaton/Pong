@@ -48,12 +48,12 @@ describe('computeTiltTargetY', () => {
     expect(computeTiltTargetY(deg(TILT_MAX_DEG), 0, baseline, 0, paddleMinY, paddleMaxY)).toBe(paddleMaxY)
   })
 
-  it('rotation 0 drives Y from beta only — gamma alone produces no movement', () => {
+  it('rotation 0 drives Y from beta only - gamma alone produces no movement', () => {
     const baseline = calibrateTiltBaseline(0, 0, boardCenterY)
     expect(computeTiltTargetY(0, deg(TILT_MAX_DEG), baseline, 0, paddleMinY, paddleMaxY)).toBeCloseTo(boardCenterY, 5)
   })
 
-  it('rotation ±90 drives Y from gamma only — beta alone produces no movement', () => {
+  it('rotation ±90 drives Y from gamma only - beta alone produces no movement', () => {
     const baseline = calibrateTiltBaseline(0, 0, boardCenterY)
     expect(computeTiltTargetY(deg(TILT_MAX_DEG), 0, baseline, 90, paddleMinY, paddleMaxY)).toBeCloseTo(boardCenterY, 5)
     expect(computeTiltTargetY(deg(TILT_MAX_DEG), 0, baseline, -90, paddleMinY, paddleMaxY)).toBeCloseTo(boardCenterY, 5)

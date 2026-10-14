@@ -35,7 +35,7 @@ import { humanPlayersFor, tiltControlActiveFor } from '@/utils/gameMode'
 import { safeBack } from '@/utils/navigation'
 
 // Converts a point expressed in the board's own LOCAL coordinate space (the same frame board.x/y/
-// paddleX live in) into a real, absolute screen position — the exact inverse of TouchInputLayer's
+// paddleX live in) into a real, absolute screen position - the exact inverse of TouchInputLayer's
 // own screenToLocalY, generalized to both axes since floating UI (score labels, corner buttons)
 // needs a full 2D screen position, not just a Y. Used to anchor floating UI to a point ON the board
 // (e.g. "near board's own top-left corner") so it lands in the correct real screen location
@@ -62,7 +62,7 @@ function localToScreen(localX: number, localY: number, containerWidth: number, c
 const SEATS: readonly Player[] = [1, 2]
 
 export default function GameScreen() {
-  // Committed once by /loadout when every human player readied up — falls back to defaults for a
+  // Committed once by /loadout when every human player readied up - falls back to defaults for a
   // direct/deep link to this screen, which never went through /loadout to commit anything.
   const activeRoundSettings = useSelector((state: RootState) => state.liveplay.activeRoundSettings)
   const dispatch = useDispatch<AppDispatch>()
@@ -73,9 +73,9 @@ export default function GameScreen() {
   const paddleSize = roundSettings.paddleSize
   const ballSpeed = roundSettings.ballSpeed
   const isSolo = roundSettings.gameMode === 'solo'
-  // Only P2 can be CPU-controlled — pass-and-play stays the default, single-player just swaps who
+  // Only P2 can be CPU-controlled - pass-and-play stays the default, single-player just swaps who
   // controls P2's paddle (see useAIOpponent, which drives it through the exact same setPaddleTarget
-  // path a human's touch uses). null for solo too — there's no seat 2 to control at all.
+  // path a human's touch uses). null for solo too - there's no seat 2 to control at all.
   const aiPlayer: Player | null = roundSettings.gameMode === 'vsCpu' ? 2 : null
   const aiDifficulty = roundSettings.aiDifficulty
   const humanPlayers = humanPlayersFor(roundSettings.gameMode)
@@ -90,29 +90,29 @@ export default function GameScreen() {
   //
   // DELIBERATE DEVIATION from calling @tastic/core's getFixedZoneRotation directly: that
   // function (verified against the installed package's actual source, src/rotation.ts) returns 0 for
-  // 'faceToFace' and ±90 for 'sideBySide' — the correct polarity for BoxHockey/AirHockey's own board,
+  // 'faceToFace' and ±90 for 'sideBySide' - the correct polarity for BoxHockey/AirHockey's own board,
   // which is PORTRAIT-native in local space (goals/paddle-separation along local Y) and so needs zero
   // rotation exactly when the device is held upright/portrait (faceToFace) and a compensating ±90
   // only when physically turned sideways (sideBySide) to still read correctly. Pong's board is the
-  // mirror image — LANDSCAPE-native in local space (paddle separation along local X, the long axis —
-  // see BoardLayout's own doc comment in types/index.ts) — so it needs the OPPOSITE polarity: zero
+  // mirror image - LANDSCAPE-native in local space (paddle separation along local X, the long axis -
+  // see BoardLayout's own doc comment in types/index.ts) - so it needs the OPPOSITE polarity: zero
   // rotation for sideBySide (the device is already physically turned so its long edge runs left-
   // right, matching Pong's native wide shape with no correction needed) and ±90 for faceToFace (the
   // device stays portrait/unrotated under app.json's OS-level portrait lock, so the wide board must
-  // still be rotated to present correctly to two players seated at its near/far ends — the same
+  // still be rotated to present correctly to two players seated at its near/far ends - the same
   // swap-and-rotate escape hatch FakeLandscapeView itself uses for wide content, just triggered by
-  // the opposite orientationMode, since FakeLandscapeView's own content — the home/loadout screens —
+  // the opposite orientationMode, since FakeLandscapeView's own content - the home/loadout screens -
   // is authored tall/stacked-native instead). A literal `getFixedZoneRotation(orientationMode, ...)`
   // call here would rotate the board exactly backwards (rotating the one mode that's already correct,
-  // and leaving unrotated the one mode that genuinely needs it) — confirmed by cross-checking against
+  // and leaving unrotated the one mode that genuinely needs it) - confirmed by cross-checking against
   // AirHockey's own OLD (portrait-native) rotation wrapper, whose goalAxis === 'horizontal' branch
   // (its own sideBySide-equivalent) is the one that rotates, mirroring getFixedZoneRotation's real
   // convention for tall-native content exactly, which is the mirror image of what a wide-native board
   // needs.
   //
-  // The sign for faceToFace is keyed off `upsideDown` (the only live-varying signal in that mode —
+  // The sign for faceToFace is keyed off `upsideDown` (the only live-varying signal in that mode -
   // useOrientationState's own faceToFace reading hardcodes p1OnRight: true, so it can never
-  // actually distinguish anything) rather than derived from theory — like AirHockey's original
+  // actually distinguish anything) rather than derived from theory - like AirHockey's original
   // rotation wrapper, whose own rotation SIGN was "confirmed empirically" against the real render
   // rather than reasoned out in the abstract, this polarity should be spot-checked in a simulator by
   // rotating through both faceToFace placements and flipped if player 1's paddle doesn't end up
@@ -126,26 +126,26 @@ export default function GameScreen() {
   // instant this screen mounts (well before any actual tilt-steering begins) and never toggles again
   // mid-round.
   const { orientationMode, upsideDown } = useOrientationState(tiltControlActive)
-  // vsCpu always seats the sole human at player 1 (see humanPlayersFor) — pin them to the visual
+  // vsCpu always seats the sole human at player 1 (see humanPlayersFor) - pin them to the visual
   // bottom of a portrait/faceToFace hold, the natural single-hand grip, rather than the ±90/
   // upsideDown pairing above. That pairing is tuned for two-player pass-and-play, where either seat
   // is equally valid and the upsideDown compensation instead keeps player 1 consistently reading
-  // upright from whichever seat physically picked up the device — a meaningless distinction with
+  // upright from whichever seat physically picked up the device - a meaningless distinction with
   // only one seat, and one that happens to land the lone human at the TOP (CPU at the bottom) for
   // the common upsideDown===false hold, backwards from where a solo player's thumb actually is.
   const rotation: 0 | 90 | -90 = orientationMode !== 'faceToFace' ? 0 : aiPlayer !== null ? (upsideDown ? 90 : -90) : upsideDown ? -90 : 90
 
   const { width, height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
-  // Remaps insets onto the correct visual edge for the board's own rotated container — see
+  // Remaps insets onto the correct visual edge for the board's own rotated container - see
   // rotateInsets' own doc comment in @tastic/core. Applied wherever this screen's floating
   // UI needs to reason about the board's own (possibly rotated) edges, via computeBoardLayout below
   // (board.x/y/width/height end up correctly inset once, not the real screen's raw insets).
   const rotatedInsets = useMemo(() => rotateInsets(insets, rotation), [insets, rotation])
 
-  // Pre-rotation container dimensions: real width/height directly for sideBySide (no swap — local
+  // Pre-rotation container dimensions: real width/height directly for sideBySide (no swap - local
   // space maps straight onto the screen), SWAPPED for faceToFace (sizes the local rect correctly for
-  // the container that's about to be rotated 90°/-90° to display it) — see computeBoardLayout's own
+  // the container that's about to be rotated 90°/-90° to display it) - see computeBoardLayout's own
   // NOTE on the orientation layer in utils/board.ts.
   const containerWidth = rotation === 0 ? width : height
   const containerHeight = rotation === 0 ? height : width
@@ -155,17 +155,17 @@ export default function GameScreen() {
   // Settings/quit-confirm dialogs pause gameplay while open.
   const [settingsOpen, setSettingsOpen] = useState(false)
   // useQuitConfirmation reads hasProgress lazily (only inside a real requestBack() call, via its
-  // own ref-mirrored getter — see that hook's own doc) rather than taking a plain boolean, which is
+  // own ref-mirrored getter - see that hook's own doc) rather than taking a plain boolean, which is
   // exactly what makes this safe to call before `state` exists yet: `state` (lives/bricks/scores)
   // comes from useGameState, which itself needs `paused` (derived from confirmVisible) as an INPUT,
   // so a plain-boolean argument computed from `state` here would be a real circular render
   // dependency. hasProgressRef breaks the remaining direct textual reference to lives/bricks/scores
   // (react-hooks/immutability flags reading a binding before its own declaration, even one only
-  // ever invoked later — see the mirroring effect right after `state` is destructured below) —
+  // ever invoked later - see the mirroring effect right after `state` is destructured below) -
   // it's reassigned every render via the same effect-based "ref mirrors latest value" idiom this
   // file already uses for vibrationRef/soundRef, so requestBack still always calls whatever
   // lives/bricks/scores were bound to as of the most recently committed render, same as before.
-  // scores stays [0,0] the whole round in solo (see useGameState's TICK case) — a lost life or a
+  // scores stays [0,0] the whole round in solo (see useGameState's TICK case) - a lost life or a
   // broken brick is solo's own equivalent of "there's progress worth confirming before losing it".
   const hasProgressRef = useRef<() => boolean>(() => false)
   const { confirmVisible, requestBack, cancelBack } = useQuitConfirmation(() => hasProgressRef.current(), safeBack)
@@ -175,7 +175,7 @@ export default function GameScreen() {
   const { backgroundPaused, resume } = useBackgroundPause(() => phase !== 'gameOver' && !settingsOpen && !confirmVisible)
   const paused = settingsOpen || confirmVisible || backgroundPaused
 
-  // Two-player (pass-and-play) only — seat -> that seat's own newly-unlocked achievements this
+  // Two-player (pass-and-play) only - seat -> that seat's own newly-unlocked achievements this
   // game, read by the two-player game-over overlay below to badge each seat correctly (see the
   // gameOver effect below for why this replaces showAchievementToast for that mode specifically).
   const [seatUnlocks, setSeatUnlocks] = useState<Partial<Record<Player, AchievementDefinition[]>>>({})
@@ -183,7 +183,7 @@ export default function GameScreen() {
   const { state, setPaddleTarget, resetGame } = useGameState(board, scoreToWin, ballSpeed, roundSettings.gameMode, roundSettings.bricksEnabled, paused)
   const { phase, ball, paddles, scores, bounceCount, bricks, lives } = state
 
-  // See hasProgressRef's own comment above — mirrors the real hasProgress check into it every
+  // See hasProgressRef's own comment above - mirrors the real hasProgress check into it every
   // render, now that lives/bricks/scores actually exist to read.
   useEffect(() => {
     hasProgressRef.current = () => (isSolo ? lives < SOLO_LIVES || bricks.some((b) => b.destroyed) : scores[0] > 0 || scores[1] > 0)
@@ -192,7 +192,7 @@ export default function GameScreen() {
   // Mirrors "an actual live rally, not paused" into liveplay.activelyPlaying for Providers.tsx's
   // EdgeGuardBridge rather than calling useEdgeGestureGuard directly here: it stays mounted once for
   // the app's lifetime, and this is just the one signal it has no other way to read. Unlocked between points (idle/pointScored/gameOver) and whenever a
-  // dialog is open (paused) — back/settings stay unconditionally visible here (unlike Snake/
+  // dialog is open (paused) - back/settings stay unconditionally visible here (unlike Snake/
   // LightCycles), so there's no button-visibility signal to key off instead. Reset to false on
   // unmount too, so leaving this screen mid-rally by any path can't leave Edge Guard stuck on.
   useEffect(() => {
@@ -202,7 +202,7 @@ export default function GameScreen() {
     }
   }, [phase, paused, dispatch])
 
-  // No toast may stay on screen during live play — only between rounds or at game over. Unlock
+  // No toast may stay on screen during live play - only between rounds or at game over. Unlock
   // toasts fire at game over and last 7s, so a quick restart would otherwise carry them into the
   // next rally.
   useEffect(() => {
@@ -225,14 +225,14 @@ export default function GameScreen() {
   const winner: Player = scores[0] >= scoreToWin ? 1 : 2
   const loser: Player = winner === 1 ? 2 : 1
 
-  // Neither AirHockey nor BoxHockey renders a bare ProfileChip directly — both only ever consume it
-  // indirectly through ProfilePicker/ProfilesManager — so this is the one spot in the whole family
+  // Neither AirHockey nor BoxHockey renders a bare ProfileChip directly - both only ever consume it
+  // indirectly through ProfilePicker/ProfilesManager - so this is the one spot in the whole family
   // that reads useProfiles() just to look a profile up by id, not to drive a picker of its own.
   // Falls back to the plain 'P1'/'P2' label (same idle text ProfilePicker's own guestLabel would
   // show) whenever the winning seat never had a profile selected for this round.
   const { profiles, lastSelected } = useProfiles()
   const winnerProfile = profiles.find((p) => p.id === lastSelected[winner]) ?? null
-  // Whichever profile each seat had selected, if any — read the same way winnerProfile just
+  // Whichever profile each seat had selected, if any - read the same way winnerProfile just
   // above is, so the two-player achievement badges below can identify whose unlock is whose.
   const seatProfile: Partial<Record<Player, Profile>> = { 1: profiles.find((p) => p.id === lastSelected[1]) ?? undefined, 2: profiles.find((p) => p.id === lastSelected[2]) ?? undefined }
   const achievementOwners: Record<Player, AchievementUnlockOwner> = { 1: { profile: seatProfile[1], color: playerColor[1] }, 2: { profile: seatProfile[2], color: playerColor[2] } }
@@ -240,17 +240,17 @@ export default function GameScreen() {
   const vibration = useVibration()
   const vibrationRef = useRef(vibration)
   // Mirrored every render so the stable effects below can read the latest vibration handle without
-  // needing it in their own deps — done inside an effect (no dependency array, so it reruns after
+  // needing it in their own deps - done inside an effect (no dependency array, so it reruns after
   // every render) rather than as a bare assignment in the component body, matching AirHockey's own
   // identical vibrationRef in its game.tsx: a bare `.current =` write during render is a render-time
   // side effect the react-hooks/refs rule (rightly) flags, since React may render this component
   // more than once for a single commit (e.g. under StrictMode or a Suspense retry) without any of
-  // those extra renders actually reaching the browser/device — an effect only fires once per real commit.
+  // those extra renders actually reaching the browser/device - an effect only fires once per real commit.
   useEffect(() => {
     vibrationRef.current = vibration
   })
 
-  // Gameplay SFX — mirrors the haptics above one-for-one: each event fires its soundRef.current.
+  // Gameplay SFX - mirrors the haptics above one-for-one: each event fires its soundRef.current.
   // playX() beside the matching vibrationRef.current.x(). Ref-mirrored the same way vibration is
   // above, not called directly, so the effects below don't need these in their dependency arrays.
   const playBounce = useGameSound(require('../../assets/sounds/bounce.wav'))
@@ -289,7 +289,7 @@ export default function GameScreen() {
       // Recorded on the transition rather than in the reducer, which runs every physics step and
       // has no notion of "this is new". prevPhaseRef guards a re-run from any other dep changing.
       if (isSolo) {
-        // Solo has no opponent/score-tuple shape to fit into MatchOutcome — a genuinely separate
+        // Solo has no opponent/score-tuple shape to fit into MatchOutcome - a genuinely separate
         // recording path (see recordSoloOutcome), not a solo-shaped MatchOutcome. lives > 0 at
         // gameOver means every brick was cleared (see useGameState's TICK case); lives <= 0 means
         // the player ran out.
@@ -300,17 +300,17 @@ export default function GameScreen() {
       } else {
         const matchWinner: Player = scores[0] >= scoreToWin ? 1 : 2
         const profileIds = { 1: lastSelected[1] ?? undefined, 2: aiPlayer === null ? (lastSelected[2] ?? undefined) : undefined }
-        // bricksDestroyed is 0 whenever the Bricks toggle was off for this round — correctly a
+        // bricksDestroyed is 0 whenever the Bricks toggle was off for this round - correctly a
         // no-op add to the shared counter, not something that needs its own on/off branch here.
         const result = recordMatchOutcome({ winner: matchWinner, scores: [scores[0], scores[1]] }, { gameMode: roundSettings.gameMode, aiDifficulty, ballSpeed, profileIds, bricksDestroyed: bricks.filter((b) => b.destroyed).length })
         if (aiPlayer === null) {
-          // Genuine two-seat pass-and-play — showAchievementToast below is a single, screen-fixed
+          // Genuine two-seat pass-and-play - showAchievementToast below is a single, screen-fixed
           // @rific/toaster call with no rotation of its own, so it only ever reads right-side-up
           // for whichever seat happens to match the CURRENT `rotation`. A player seated opposite
           // (the other end of a faceToFace hold) would see it upside-down even though it's their
           // own achievement. Broadcasting into seatUnlocks instead lets the two-player game-over
           // overlay below (which already carries the board's own rotationStyle) show each seat's
-          // own unlocks once the match settles — same fix LightCycles's game.tsx applies via its
+          // own unlocks once the match settles - same fix LightCycles's game.tsx applies via its
           // own profileUnlockToast, for the identical reason. Device-wide achievements have no
           // per-seat owner, but both seats are human here, so they're broadcast into both seats'
           // own entries rather than dropped or arbitrarily attributed to one side.
@@ -318,9 +318,9 @@ export default function GameScreen() {
           // eslint-disable-next-line react-hooks/set-state-in-effect -- a real one-shot transition guarded by prevPhaseRef above, not a render loop; the sibling vsCpu branch below fires showAchievementToast (which does the same thing inside @rific/toaster) unconditionally in this same effect
           setSeatUnlocks(broadcast)
         } else {
-          // vsCpu only ever has one human perspective (seat 1) to address — see the rotation
+          // vsCpu only ever has one human perspective (seat 1) to address - see the rotation
           // comment above for why this mode never enters a genuine faceToFace two-seat hold in
-          // the first place — so the shared, screen-fixed toast is fine here.
+          // the first place - so the shared, screen-fixed toast is fine here.
           ;[...result.device, ...(result.profiles[1] ?? [])].forEach((achievement) => {
             showAchievementToast(achievement.title, 'Achievement unlocked', undefined, { color: ACHIEVEMENT_TIER_COLORS[achievement.tier], icon: achievement.icon })
           })
@@ -332,7 +332,7 @@ export default function GameScreen() {
 
   // ─── Floating UI placement ─────────────────────────────────────────────────
   // Score labels and the back/settings buttons all live OUTSIDE the board's own rotated container
-  // (they're floating UI, not part of the playing field — the board itself never rotates twice) and
+  // (they're floating UI, not part of the playing field - the board itself never rotates twice) and
   // are individually positioned via localToScreen + their own small rotate transform, the same
   // technique BoxHockey's MatchOverlays uses for its dialog card.
   const screenCenterX = width / 2
@@ -343,9 +343,9 @@ export default function GameScreen() {
   const scoreMargin = 20
   const p1ScorePos = localToScreen(board.x + scoreMargin, board.y + scoreMargin, containerWidth, containerHeight, screenCenterX, screenCenterY, rotation)
   const p2ScorePos = localToScreen(board.x + board.width - scoreMargin, board.y + scoreMargin, containerWidth, containerHeight, screenCenterX, screenCenterY, rotation)
-  // Player 2 sits at the OPPOSITE end of a face-to-face hold (see the rotation comment above) — its
+  // Player 2 sits at the OPPOSITE end of a face-to-face hold (see the rotation comment above) - its
   // own label needs the opposing 180° reading direction to stay upright from player 2's own seat.
-  // For sideBySide (rotation 0) this is trivially still 0 — both players share the same viewing
+  // For sideBySide (rotation 0) this is trivially still 0 - both players share the same viewing
   // angle there, so no relative flip is needed.
   const p2Rotation: 0 | 90 | -90 = rotation === 90 ? -90 : rotation === -90 ? 90 : 0
 
@@ -360,10 +360,10 @@ export default function GameScreen() {
   // positioning above (backPos/settingsPos + rotationStyle, P1's own reading direction) is fine for
   // vsCpu/sideBySide, but breaks down for two-player faceToFace: unlike the score labels just above
   // (two independent instances, each correctly rotated for its own player via p1/p2RotationStyle),
-  // there's only ONE back chip and ONE settings chip — a single shared element can't simultaneously
+  // there's only ONE back chip and ONE settings chip - a single shared element can't simultaneously
   // read right-side-up for both players when they're seated on opposite ends. neutralZoneStyle below
   // sidesteps that instead of trying to solve it: pinned to the real screen's own left/right edge,
-  // vertically centered, the same neutral midline LightCycles'/BoxHockey's in-match chips use — still
+  // vertically centered, the same neutral midline LightCycles'/BoxHockey's in-match chips use - still
   // carrying rotationStyle (not p2RotationStyle) since that ±90° reflects the whole board's own
   // landscape-native-vs-portrait-hold orientation, not a P1-vs-P2 opposing flip, and stays needed
   // even here for the icon to read upright at all.
@@ -376,7 +376,7 @@ export default function GameScreen() {
   ) : (
     <>
       <Text style={{ color: playerColor[1] }}>{scores[0]}</Text>
-      <Text style={{ color: fgMuted }}> – </Text>
+      <Text style={{ color: fgMuted }}> - </Text>
       <Text style={{ color: playerColor[2] }}>{scores[1]}</Text>
     </>
   )
@@ -384,10 +384,10 @@ export default function GameScreen() {
     <View style={[styles.root, { backgroundColor: bg }]}>
       <StatusBar hidden />
 
-      {/* Board's own rotated container — see the rotation comment above for why, unlike
+      {/* Board's own rotated container - see the rotation comment above for why, unlike
           BoxHockey/AirHockey's portrait-native board, Pong's landscape-native board genuinely needs
           to visually rotate for a face-to-face portrait hold. Sized to containerWidth/containerHeight
-          (the pre-swap dimensions — since a 90°/-90° rotation swaps which screen dimension is "width"
+          (the pre-swap dimensions - since a 90°/-90° rotation swaps which screen dimension is "width"
           vs "height" for this box's own layout, it has to be laid out BEFORE the transform using
           whichever pairing was fed into computeBoardLayout above) and centered on the real screen
           exactly the way @tastic/core's own FakeLandscapeView centers its rotated content. */}
@@ -406,7 +406,7 @@ export default function GameScreen() {
         <Board board={board} ball={ball} paddles={paddles} phase={phase} showWalls={isDesktopWeb} bricks={bricks} soloMode={isSolo} />
       </View>
 
-      {/* Touch input — deliberately a SIBLING of the board's own rotated container, not nested
+      {/* Touch input - deliberately a SIBLING of the board's own rotated container, not nested
           inside it: react-native-gesture-handler does not correct a Pan gesture's own coordinate
           reporting for an ancestor View's CSS rotation, so keeping its root entirely outside that
           rotated ancestor sidesteps the whole class of issue rather than fighting it. Its own zones
@@ -415,18 +415,18 @@ export default function GameScreen() {
           live play (paused, or the match has ended) same as AirHockey's own gestureEnabled gate. */}
       <TouchInputLayer humanPlayers={humanPlayers} enabled={!paused && phase !== 'gameOver'} containerHeight={containerHeight} rotation={rotation} onPaddleTargetY={setPaddleTarget} />
 
-      {/* Web-only, additive keyboard input — see that component's own doc for why it needs no
+      {/* Web-only, additive keyboard input - see that component's own doc for why it needs no
       rotation-awareness the way TouchInputLayer does. paddles[1].y/paddles[2].y are read fresh
       every frame internally (not reactively), so passing the current `paddles` snapshot here on
       every render is exactly right, not stale. */}
       <KeyboardInputLayer enabled={!paused && phase !== 'gameOver'} humanPlayers={humanPlayers} controlScheme={roundSettings.controlScheme} paddleY={{ 1: paddles[1].y, 2: paddles[2].y }} onPaddleTargetY={setPaddleTarget} />
 
       {/* Additive on top of TouchInputLayer's own always-on drag input, same precedent as
-      KeyboardInputLayer above — see that component's own doc for why this never disables touch.
+      KeyboardInputLayer above - see that component's own doc for why this never disables touch.
       Always mounted (inert whenever `enabled` is false), same convention as the other two layers. */}
       <TiltInputLayer player={humanPlayers[0]} enabled={tiltControlActive && !paused && phase !== 'gameOver'} phase={phase} rotation={rotation} board={board} paddleY={paddles[humanPlayers[0]].y} onPaddleTargetY={setPaddleTarget} />
 
-      {/* Score labels — plain react-native-paper Text, not on the Skia canvas, each individually
+      {/* Score labels - plain react-native-paper Text, not on the Skia canvas, each individually
           rotated to face its own player correctly (see p1/p2 rotation comment above) and anchored
           near its own player's own corner of the board via localToScreen. */}
       <View pointerEvents='none' style={[styles.floatingChip, { left: p1ScorePos.x - 30, top: p1ScorePos.y - 20 }, rotationStyle]}>
@@ -440,7 +440,7 @@ export default function GameScreen() {
         </Text>
       </View>
 
-      {/* Back + settings — see neutralZone's own doc above for the two treatments. Board-corner
+      {/* Back + settings - see neutralZone's own doc above for the two treatments. Board-corner
           (vsCpu/sideBySide): floating chips near the board's own bottom corners (offset from the
           score labels, which sit near the top corners), each rotated as a unit via the same
           `rotation` so their icon reads upright given the current hold. Neutral-edge (two-player
@@ -466,9 +466,9 @@ export default function GameScreen() {
         </>
       )}
 
-      {/* Game Over overlay — solo has no opponent, so it gets its own branch entirely: lives > 0
+      {/* Game Over overlay - solo has no opponent, so it gets its own branch entirely: lives > 0
           means every brick was cleared (a win), lives <= 0 means the player ran out (see
-          useGameState's TICK case) — there's no "loser" to speak of, so both buttons just use
+          useGameState's TICK case) - there's no "loser" to speak of, so both buttons just use
           playerColor[1] rather than the winner/loser pairing the two-paddle branch below uses. */}
       {phase === 'gameOver' &&
         (isSolo ? (
@@ -510,10 +510,10 @@ export default function GameScreen() {
               )}
               <Text variant='bodyLarge' style={[styles.overlayScore, { fontFamily: MONO_FONT }]}>
                 <Text style={{ color: playerColor[1] }}>{scores[0]}</Text>
-                <Text style={{ color: fgMuted }}> – </Text>
+                <Text style={{ color: fgMuted }}> - </Text>
                 <Text style={{ color: playerColor[2] }}>{scores[1]}</Text>
               </Text>
-              {/* Two-player-only achievement rows — see seatUnlocks' own doc above for why these
+              {/* Two-player-only achievement rows - see seatUnlocks' own doc above for why these
               land here instead of the shared showAchievementToast vsCpu still uses. This card
               already carries a single shared rotationStyle, so each row's owner avatar is what
               identifies whose achievement it is, not a second independent rotation. */}
@@ -528,7 +528,7 @@ export default function GameScreen() {
           </View>
         ))}
 
-      {/* Quit confirmation — shared @tastic/hud dialog; accepts its primary accent + default font
+      {/* Quit confirmation - shared @tastic/hud dialog; accepts its primary accent + default font
           in place of this dialog's previous secondary-accent Quit button and MONO_FONT styling
           (a deliberate trade-off for convergence onto the shared component). */}
       <ConfirmDialog visible={confirmVisible} title='Quit Match?' message={progressMessage} confirmLabel='Quit' cancelLabel='Cancel' icon='alert-circle-outline' destructive={false} onConfirm={safeBack} onCancel={cancelBack} rotation={rotation} />
@@ -536,7 +536,7 @@ export default function GameScreen() {
       play stays frozen until Resume, so a match never restarts before the player is back and ready. */}
       <ConfirmDialog visible={backgroundPaused} title='Paused' message={progressMessage} confirmLabel='Resume' cancelLabel='Quit' icon='pause-circle-outline' destructive={false} onConfirm={resume} onCancel={safeBack} rotation={rotation} />
 
-      {/* rotation={rotation} — same physical-hold-compensating rotation the board itself uses (see
+      {/* rotation={rotation} - same physical-hold-compensating rotation the board itself uses (see
           the rotation comment above), not a separate reading; previously omitted, leaving this
           dialog's content stuck unrotated for a faceToFace hold while every other floating card on
           this screen correctly rotated. */}
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
   chipButton: { margin: 0 },
   floatingChip: { position: 'absolute' },
   localContainer: { position: 'absolute' },
-  // neutralZone's own back/settings position — full screen height at a fixed left/right edge,
+  // neutralZone's own back/settings position - full screen height at a fixed left/right edge,
   // button centered vertically via justifyContent, same shape as LightCycles'/BoxHockey's own
   // neutral-midline chip slots (see neutralZone's own doc above for why).
   neutralSlot: { alignItems: 'center', bottom: 0, justifyContent: 'center', position: 'absolute', top: 0 },
@@ -574,7 +574,7 @@ const styles = StyleSheet.create({
   overlayScore: {},
   overlayTitle: { fontWeight: 'bold' },
   root: { flex: 1 },
-  // Marginless — sits between the "Wins!" title and the score line, both of which already carry
+  // Marginless - sits between the "Wins!" title and the score line, both of which already carry
   // this card's own vertical gap (see overlayCard's own `gap`), so this row needs no extra spacing
   // of its own to read as one more line in that same stack.
   winnerRow: {

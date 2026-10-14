@@ -9,7 +9,7 @@ describe('parseGameMode', () => {
   it('falls back to twoPlayer for anything else, including an undefined param', () => {
     expect(parseGameMode(undefined)).toBe('twoPlayer')
     expect(parseGameMode('garbage')).toBe('twoPlayer')
-    // Solo is never a route param (see app/loadout.tsx's finalMode) — parseGameMode has no case for
+    // Solo is never a route param (see app/loadout.tsx's finalMode) - parseGameMode has no case for
     // it, so it falls through to the same default as any other unrecognized string.
     expect(parseGameMode('solo')).toBe('twoPlayer')
   })
@@ -17,7 +17,7 @@ describe('parseGameMode', () => {
 
 describe('humanPlayersFor', () => {
   // Regression guard for the pre-fix bug: the original ternary keyed off 'vsCpu' (`=== 'vsCpu' ?
-  // [1] : [1, 2]`), which silently fell into the [1, 2] branch for 'solo' — wrong, solo has no
+  // [1] : [1, 2]`), which silently fell into the [1, 2] branch for 'solo' - wrong, solo has no
   // second paddle at all.
   it('returns just seat 1 for both vsCpu and solo', () => {
     expect(humanPlayersFor('vsCpu')).toEqual([1])

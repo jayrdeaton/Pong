@@ -39,7 +39,7 @@ describe('paddleX', () => {
 })
 
 describe('ballRadius', () => {
-  it('scales with board HEIGHT, not width — the axis that stays meaningful across both seating orientations', () => {
+  it('scales with board HEIGHT, not width - the axis that stays meaningful across both seating orientations', () => {
     const short = computeBoardLayout(900, 300, insets, 'medium')
     const tall = computeBoardLayout(900, 600, insets, 'medium')
     expect(tall.ballRadius).toBeGreaterThan(short.ballRadius)
@@ -47,7 +47,7 @@ describe('ballRadius', () => {
 })
 
 describe('paddleMinY / paddleMaxY', () => {
-  it('bracket centerY, inset by paddleHeight/2, spanning the FULL board height — no half-court clamp, unlike AirHockey', () => {
+  it('bracket centerY, inset by paddleHeight/2, spanning the FULL board height - no half-court clamp, unlike AirHockey', () => {
     const board = computeBoardLayout(900, 400, insets, 'medium')
     expect(board.paddleMinY).toBeCloseTo(board.y + board.paddleHeight / 2, 5)
     expect(board.paddleMaxY).toBeCloseTo(board.y + board.height - board.paddleHeight / 2, 5)
@@ -71,7 +71,7 @@ describe('desktop web letterboxing', () => {
     expect(board.width).toBeLessThan(2000) // letterboxing actually engaged, not just a coincidence
   })
 
-  it('does not letterbox on native/mobile — the board fills the viewport exactly, whatever its shape', () => {
+  it('does not letterbox on native/mobile - the board fills the viewport exactly, whatever its shape', () => {
     require('react-native').Platform.OS = 'ios'
     const board = computeBoardLayout(2000, 900, insets, 'medium')
     expect(board.width).toBeCloseTo(2000, 5)
@@ -118,7 +118,7 @@ describe('buildSoloBrickField', () => {
     expect(bricks.every((b) => withinBoard(b, board))).toBe(true)
   })
 
-  it('no two bricks share a position — a real grid, not a stack of overlapping rects', () => {
+  it('no two bricks share a position - a real grid, not a stack of overlapping rects', () => {
     const positions = new Set(bricks.map((b) => `${b.x},${b.y}`))
     expect(positions.size).toBe(bricks.length)
   })
@@ -138,7 +138,7 @@ describe('buildSharedBrickField', () => {
     expect(bricks.every((b) => withinBoard(b, board))).toBe(true)
   })
 
-  it("never overlaps either paddle's reachable column — centered on the court, paddles fixed at their own X", () => {
+  it("never overlaps either paddle's reachable column - centered on the court, paddles fixed at their own X", () => {
     const halfW = board.paddleWidth / 2
     const p1Right = board.paddleX[1] + halfW
     const p2Left = board.paddleX[2] - halfW

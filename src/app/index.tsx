@@ -18,7 +18,7 @@ export default function HomeScreen() {
   // useOrientationState), so the title screen rotates along with everywhere else as soon as
   // the phone is turned. Lock Orientation (see SettingsDialog) is the opt-in for pinning it, applied
   // app-wide by _layout.tsx's OrientationProvider (`freezeWhileLocked`), so nothing is passed here.
-  // app.json is portrait-locked at the OS level now (no more real OS rotation to rely on) — see
+  // app.json is portrait-locked at the OS level now (no more real OS rotation to rely on) - see
   // FakeLandscapeView below, which fakes the rest entirely in JS from this hook's live
   // accelerometer reading.
   const { orientationMode, p1OnRight, upsideDown } = useOrientationState()
@@ -31,7 +31,7 @@ export default function HomeScreen() {
   const { colors, dark } = useAutoPaperTheme()
   // react-native-safe-area-context always reports insets relative to the device's own fixed
   // physical frame (the OS thinks the interface is still portrait-locked and never rotates, so it
-  // has no idea FakeLandscapeView below is rotating the content) — rotateInsets remaps them onto
+  // has no idea FakeLandscapeView below is rotating the content) - rotateInsets remaps them onto
   // whichever edge they actually correspond to once visually rotated, using the same rotation
   // FakeLandscapeView itself renders with, so `top`/`right` below always mean the screen's real,
   // visual edges regardless of how the phone is being held.
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1
   },
-  // Owns the flex-centering layout `container` used to apply directly — now one level deeper, since
+  // Owns the flex-centering layout `container` used to apply directly - now one level deeper, since
   // everything visible sits inside FakeLandscapeView, which needs a real (not shrink-wrapped)
   // full-bleed box to size its own absolutely-positioned children (the settings cog) against
   // correctly.
