@@ -2,6 +2,7 @@ import { defaultColors, getThirdColor, useAutoPaperTheme, useThemeSettings } fro
 import { FakeLandscapeView, getViewRotation, rotateInsets, useOrientationState } from '@tastic/core'
 import { ControlSchemePicker, CornerActionButtons, getColorPopoverId, getCpuDifficultyPopoverId, getInlineColorPickerContentSize, getLabeledDropdownContentHeight, LABELED_DROPDOWN_POPOVER_WIDTH, MenuOption, PlayerSetupPanel, PressAwayOverlay, ReadyButton, SharedActionBand, usePopoverHost, useZoneClampedAlign } from '@tastic/hud'
 import { assignSeatScheme } from '@tastic/input'
+import { avoidSeatColorClash } from '@tastic/profile'
 import { DualZoneLayout, needsSharedNeutralZone, useDualZoneLayout } from '@tastic/split-screen'
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -12,6 +13,7 @@ import { useDispatch, useSelector } from 'react-redux'
 
 import { LOADOUT_SHARED_CONTROLS_IDS, LoadoutSharedControls } from '@/components/LoadoutSharedControls'
 import { SettingsDialog } from '@/components/SettingsDialog'
+import { DEFAULT_P1_COLOR, DEFAULT_P2_COLOR } from '@/constants/game'
 import { useProfiles } from '@/hooks/useProfiles'
 import { useSettings } from '@/hooks/useSettings'
 import { liveplayActions } from '@/redux/liveplaySlice'
@@ -27,6 +29,10 @@ import { safeBack } from '@/utils/navigation'
 // AirHockey's own loadout.tsx already follows) - kept local here instead of adding to it, same
 // 180ms BoxHockey itself uses for this exact fade.
 const PANEL_SWAP_FADE_MS = 180
+
+// What @tastic/profile's avoidSeatColorClash moves seat 2 to when both seats land on one color: a
+// profile picked for one seat can be saved as the other seat's color, with no swap step behind it.
+const SEAT_DEFAULT_COLORS = [DEFAULT_P1_COLOR, DEFAULT_P2_COLOR] as const
 
 const PADDLE_SIZE_OPTIONS: MenuOption<PaddleSizeLevel>[] = [
   { value: 'small', label: 'Small', description: 'Shorter paddle, more precision', icon: 'circle-small' },
@@ -227,8 +233,9 @@ export default function LoadoutScreen() {
   // seat before calling this).
   const applySeatColor = useCallback(
     (seat: Player, hex: string) => {
-      if (seat === 1) setThemeColor({ color: { primary: hex, secondary: p2Color, tertiary: getThirdColor(hex, p2Color) } })
-      else setThemeColor({ color: { primary: p1Color, secondary: hex, tertiary: getThirdColor(p1Color, hex) } })
+      const primary = seat === 1 ? hex : p1Color
+      const secondary = avoidSeatColorClash(primary, seat === 1 ? p2Color : hex, SEAT_DEFAULT_COLORS)
+      setThemeColor({ color: { primary, secondary, tertiary: getThirdColor(primary, secondary) } })
     },
     [setThemeColor, p1Color, p2Color]
   )
@@ -283,7 +290,7 @@ export default function LoadoutScreen() {
       const nextP1Profile = latestProfiles.find((p) => p.id === p1SelectedId) ?? null
       const nextP2Profile = p2IsHuman ? (latestProfiles.find((p) => p.id === p2SelectedId) ?? null) : null
       const nextP1 = nextP1Profile ? (override[1] ?? nextP1Profile.color) : guestColorsRef.current[1]
-      const nextP2 = !p2IsHuman ? cpuColorRef.current : nextP2Profile ? (override[2] ?? nextP2Profile.color) : guestColorsRef.current[2]
+      const nextP2 = avoidSeatColorClash(nextP1, !p2IsHuman ? cpuColorRef.current : nextP2Profile ? (override[2] ?? nextP2Profile.color) : guestColorsRef.current[2], SEAT_DEFAULT_COLORS)
       setThemeColor({ color: { primary: nextP1, secondary: nextP2, tertiary: getThirdColor(nextP1, nextP2) } })
     }, [p1SelectedId, p2SelectedId, p2IsHuman, setThemeColor])
   )
@@ -458,6 +465,9 @@ export default function LoadoutScreen() {
       guestLabel='P1'
       onProfileSelect={(profile) => {
         dispatch(seatColorsActions.setProfileOverride({ seat: 1, color: null }))
+        // Picking seat 2's profile swaps the two (see @tastic/profile's select), so seat 2's override
+        // goes too: its profile changes without its own handler running.
+        if (profile && profile.id === lastSelected[2]) dispatch(seatColorsActions.setProfileOverride({ seat: 2, color: null }))
         selectProfile(1, profile?.id ?? null)
         applySeatColor(1, profile ? profile.color : guestColors[1])
       }}
@@ -497,6 +507,7 @@ export default function LoadoutScreen() {
         p2IsHuman
           ? (profile) => {
               dispatch(seatColorsActions.setProfileOverride({ seat: 2, color: null }))
+              if (profile && profile.id === lastSelected[1]) dispatch(seatColorsActions.setProfileOverride({ seat: 1, color: null }))
               selectProfile(2, profile?.id ?? null)
               applySeatColor(2, profile ? profile.color : guestColors[2])
             }

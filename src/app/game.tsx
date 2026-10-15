@@ -3,10 +3,10 @@ import { Button, IconButton, useVibration } from '@rific/feedback-press'
 import { useToast } from '@rific/toaster'
 import { broadcastDeviceUnlocks } from '@tastic/achievements'
 import { rotateInsets, useBackgroundPause, useOrientationState } from '@tastic/core'
-import { AchievementUnlockList, type AchievementUnlockOwner, ConfirmDialog, useQuitConfirmation } from '@tastic/hud'
+import { AchievementUnlockList, type AchievementUnlockOwner, ConfirmDialog, OverlayBackdrop, OverlayCard, useOverlayCardColors, useQuitConfirmation } from '@tastic/hud'
 import { Profile, ProfileChip } from '@tastic/profile'
 import { needsSharedNeutralZone } from '@tastic/split-screen'
-import { StatusBar } from 'expo-status-bar'
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native'
 import { Icon, Text } from 'react-native-paper'
@@ -173,6 +173,19 @@ export default function GameScreen() {
   // only the Paused dialog's Resume clears - see @tastic/core's useBackgroundPause. Skipped once the
   // match is over, or while a dialog already holds the pause by itself.
   const { backgroundPaused, resume } = useBackgroundPause(() => phase !== 'gameOver' && !settingsOpen && !confirmVisible)
+  // Keeps the screen from dimming and locking while a match is up, unless Keep Awake is off in
+  // Settings (read live, so the toggle applies mid-match). Expo only does this by itself in
+  // development builds, and the OS auto-lock only counts screen touches, so tilt or keyboard steering,
+  // or watching the CPU, could let a release build lock mid-match. Failures are dropped: a browser
+  // without the Screen Wake Lock API (or one that refuses it) just keeps its own timeout.
+  const keepAwake = useSelector((state: RootState) => state.settings.keepAwake)
+  useEffect(() => {
+    if (!keepAwake) return undefined
+    activateKeepAwakeAsync('game').catch(() => {})
+    return () => {
+      deactivateKeepAwake('game').catch(() => {})
+    }
+  }, [keepAwake])
   const paused = settingsOpen || confirmVisible || backgroundPaused
 
   // Two-player (pass-and-play) only - seat -> that seat's own newly-unlocked achievements this
@@ -186,7 +199,9 @@ export default function GameScreen() {
   // See hasProgressRef's own comment above - mirrors the real hasProgress check into it every
   // render, now that lives/bricks/scores actually exist to read.
   useEffect(() => {
-    hasProgressRef.current = () => (isSolo ? lives < SOLO_LIVES || bricks.some((b) => b.destroyed) : scores[0] > 0 || scores[1] > 0)
+    // Once the match is over (gameOver) its stats are already recorded and nothing is lost, so back
+    // exits at once, the same as the Game Over card's own buttons.
+    hasProgressRef.current = () => phase !== 'gameOver' && (isSolo ? lives < SOLO_LIVES || bricks.some((b) => b.destroyed) : scores[0] > 0 || scores[1] > 0)
   })
 
   // Mirrors "an actual live rally, not paused" into liveplay.activelyPlaying for Providers.tsx's
@@ -216,9 +231,9 @@ export default function GameScreen() {
   const { dark, colors: themeColors } = useAutoPaperTheme()
   const bg = dark ? '#000000' : '#FFFFFF'
   const fg = dark ? '#FFFFFF' : '#000000'
-  const fgMuted = dark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.4)'
-  const cardBg = dark ? '#111111' : '#F2F2F2'
-  const cardBorder = dark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'
+  // The Game Over card and the dialogs' score lines sit on @tastic/hud's OverlayCard, so their text
+  // takes its theme colors rather than this screen's literal black/white.
+  const { fg: cardFg, fgMuted } = useOverlayCardColors()
 
   const playerColor: Record<Player, string> = { 1: themeColors.primary, 2: themeColors.secondary }
   const playerOnColor: Record<Player, string> = { 1: themeColors.onPrimary, 2: themeColors.onSecondary }
@@ -341,8 +356,12 @@ export default function GameScreen() {
   // Anchored to the board's OWN rect (board.x/y/width/height, not the raw container) so placement
   // automatically respects both the rotated safe-area insets AND any desktop-web letterboxing.
   const scoreMargin = 20
-  const p1ScorePos = localToScreen(board.x + scoreMargin, board.y + scoreMargin, containerWidth, containerHeight, screenCenterX, screenCenterY, rotation)
-  const p2ScorePos = localToScreen(board.x + board.width - scoreMargin, board.y + scoreMargin, containerWidth, containerHeight, screenCenterX, screenCenterY, rotation)
+  // Desktop web keeps back/settings in the page's own top corners (see backSlot below), which a
+  // court that fills the window puts right on top of these labels, so there each label sits further
+  // in along the court's edge, beside its chip instead of under it.
+  const scoreMarginAlong = isDesktopWeb ? 96 : scoreMargin
+  const p1ScorePos = localToScreen(board.x + scoreMarginAlong, board.y + scoreMargin, containerWidth, containerHeight, screenCenterX, screenCenterY, rotation)
+  const p2ScorePos = localToScreen(board.x + board.width - scoreMarginAlong, board.y + scoreMargin, containerWidth, containerHeight, screenCenterX, screenCenterY, rotation)
   // Player 2 sits at the OPPOSITE end of a face-to-face hold (see the rotation comment above) - its
   // own label needs the opposing 180° reading direction to stay upright from player 2's own seat.
   // For sideBySide (rotation 0) this is trivially still 0 - both players share the same viewing
@@ -368,6 +387,11 @@ export default function GameScreen() {
   // landscape-native-vs-portrait-hold orientation, not a P1-vs-P2 opposing flip, and stays needed
   // even here for the icon to read upright at all.
   const neutralZone = needsSharedNeutralZone(orientationMode, humanPlayers.length)
+  // Desktop web: the page's own top corners, upright, the same spot as hud's CornerActionButtons on
+  // every other screen. Both players share one screen, keyboard and mouse there, so there's no far
+  // seat for the neutral edge to serve, and the page is always read upright.
+  const backSlot = { top: 8 + insets.top, left: 8 + insets.left }
+  const settingsSlot = { top: 8 + insets.top, right: 8 + insets.right }
 
   const progressMessage = isSolo ? (
     <Text style={{ color: fgMuted }}>
@@ -382,8 +406,6 @@ export default function GameScreen() {
   )
   return (
     <View style={[styles.root, { backgroundColor: bg }]}>
-      <StatusBar hidden />
-
       {/* Board's own rotated container - see the rotation comment above for why, unlike
           BoxHockey/AirHockey's portrait-native board, Pong's landscape-native board genuinely needs
           to visually rotate for a face-to-face portrait hold. Sized to containerWidth/containerHeight
@@ -445,8 +467,18 @@ export default function GameScreen() {
           score labels, which sit near the top corners), each rotated as a unit via the same
           `rotation` so their icon reads upright given the current hold. Neutral-edge (two-player
           faceToFace): pinned to the real screen's own left/right edge instead, vertically centered,
-          reachable and legible from either seat. */}
-      {neutralZone ? (
+          reachable and legible from either seat. Desktop web: the page's own top corners (see
+          backSlot above). */}
+      {isDesktopWeb ? (
+        <>
+          <View style={[styles.floatingChip, backSlot]}>
+            <IconButton icon='arrow-left' iconColor={bg} containerColor={fg} style={styles.chipButton} size={24} onPress={requestBack} />
+          </View>
+          <View style={[styles.floatingChip, settingsSlot]}>
+            <IconButton icon='cog' iconColor={bg} containerColor={fg} style={styles.chipButton} size={24} onPress={() => setSettingsOpen(true)} accessibilityLabel='Settings' />
+          </View>
+        </>
+      ) : neutralZone ? (
         <>
           <View style={[styles.neutralSlot, { left: insets.left + 8 }]}>
             <IconButton icon='arrow-left' iconColor={bg} containerColor={fg} style={[styles.chipButton, rotationStyle]} size={24} onPress={requestBack} />
@@ -472,8 +504,8 @@ export default function GameScreen() {
           playerColor[1] rather than the winner/loser pairing the two-paddle branch below uses. */}
       {phase === 'gameOver' &&
         (isSolo ? (
-          <View style={styles.overlay}>
-            <View style={[styles.overlayCard, { backgroundColor: cardBg, borderColor: cardBorder }, rotationStyle]}>
+          <OverlayBackdrop>
+            <OverlayCard style={rotationStyle}>
               <Icon source={lives > 0 ? 'trophy' : 'heart-broken'} size={64} color={playerColor[1]} />
               <Text variant='headlineLarge' style={[styles.overlayTitle, { color: playerColor[1], fontFamily: MONO_FONT }]}>
                 {lives > 0 ? 'Cleared!' : 'Out of Lives'}
@@ -487,11 +519,11 @@ export default function GameScreen() {
               <Button mode='contained' onPress={safeBack} style={styles.overlayButton} buttonColor={playerColor[1]} textColor={playerOnColor[1]}>
                 Quit
               </Button>
-            </View>
-          </View>
+            </OverlayCard>
+          </OverlayBackdrop>
         ) : (
-          <View style={styles.overlay}>
-            <View style={[styles.overlayCard, { backgroundColor: cardBg, borderColor: cardBorder }, rotationStyle]}>
+          <OverlayBackdrop>
+            <OverlayCard style={rotationStyle}>
               <Icon source='trophy' size={64} color={playerColor[winner]} />
               <Text variant='headlineLarge' style={[styles.overlayTitle, { color: playerColor[winner], fontFamily: MONO_FONT }]}>
                 Wins!
@@ -517,15 +549,15 @@ export default function GameScreen() {
               land here instead of the shared showAchievementToast vsCpu still uses. This card
               already carries a single shared rotationStyle, so each row's owner avatar is what
               identifies whose achievement it is, not a second independent rotation. */}
-              {aiPlayer === null && <AchievementUnlockList unlocks={seatUnlocks} seats={SEATS} owners={achievementOwners} tierColors={ACHIEVEMENT_TIER_COLORS} fg={fg} />}
+              {aiPlayer === null && <AchievementUnlockList unlocks={seatUnlocks} seats={SEATS} owners={achievementOwners} tierColors={ACHIEVEMENT_TIER_COLORS} fg={cardFg} />}
               <Button mode='contained' onPress={() => resetGame(board)} style={styles.overlayButton} buttonColor={playerColor[loser]} textColor={playerOnColor[loser]}>
                 Play Again
               </Button>
               <Button mode='contained' onPress={safeBack} style={styles.overlayButton} buttonColor={playerColor[winner]} textColor={playerOnColor[winner]}>
                 Quit
               </Button>
-            </View>
-          </View>
+            </OverlayCard>
+          </OverlayBackdrop>
         ))}
 
       {/* Quit confirmation - shared @tastic/hud dialog; accepts its primary accent + default font
@@ -553,29 +585,12 @@ const styles = StyleSheet.create({
   // button centered vertically via justifyContent, same shape as LightCycles'/BoxHockey's own
   // neutral-midline chip slots (see neutralZone's own doc above for why).
   neutralSlot: { alignItems: 'center', bottom: 0, justifyContent: 'center', position: 'absolute', top: 0 },
-  overlay: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.72)',
-    bottom: 0,
-    justifyContent: 'center',
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0
-  },
   overlayButton: { width: 160 },
-  overlayCard: {
-    alignItems: 'center',
-    borderRadius: 20,
-    borderWidth: 1,
-    gap: 16,
-    padding: 32
-  },
   overlayScore: {},
   overlayTitle: { fontWeight: 'bold' },
   root: { flex: 1 },
   // Marginless - sits between the "Wins!" title and the score line, both of which already carry
-  // this card's own vertical gap (see overlayCard's own `gap`), so this row needs no extra spacing
+  // this card's own vertical gap (OverlayCard's own `gap`), so this row needs no extra spacing
   // of its own to read as one more line in that same stack.
   winnerRow: {
     alignItems: 'center',
