@@ -473,7 +473,7 @@ export default function GameScreen() {
       {isDesktopWeb ? (
         <>
           <View style={[styles.floatingChip, backSlot]}>
-            <IconButton icon='arrow-left' iconColor={bg} containerColor={fg} style={styles.chipButton} size={24} onPress={requestBack} />
+            <IconButton icon='arrow-left' iconColor={bg} containerColor={fg} style={styles.chipButton} size={24} onPress={requestBack} accessibilityLabel='Back' />
           </View>
           <View style={[styles.floatingChip, settingsSlot]}>
             <IconButton icon='cog' iconColor={bg} containerColor={fg} style={styles.chipButton} size={24} onPress={() => setSettingsOpen(true)} accessibilityLabel='Settings' />
@@ -482,7 +482,7 @@ export default function GameScreen() {
       ) : neutralZone ? (
         <>
           <View style={[styles.neutralSlot, { left: insets.left + 8 }]}>
-            <IconButton icon='arrow-left' iconColor={bg} containerColor={fg} style={[styles.chipButton, rotationStyle]} size={24} onPress={requestBack} />
+            <IconButton icon='arrow-left' iconColor={bg} containerColor={fg} style={[styles.chipButton, rotationStyle]} size={24} onPress={requestBack} accessibilityLabel='Back' />
           </View>
           <View style={[styles.neutralSlot, { right: insets.right + 8 }]}>
             <IconButton icon='cog' iconColor={bg} containerColor={fg} style={[styles.chipButton, rotationStyle]} size={24} onPress={() => setSettingsOpen(true)} accessibilityLabel='Settings' />
@@ -491,7 +491,7 @@ export default function GameScreen() {
       ) : (
         <>
           <View style={[styles.floatingChip, { left: backPos.x - 24, top: backPos.y - 24 }, rotationStyle]}>
-            <IconButton icon='arrow-left' iconColor={bg} containerColor={fg} style={styles.chipButton} size={24} onPress={requestBack} />
+            <IconButton icon='arrow-left' iconColor={bg} containerColor={fg} style={styles.chipButton} size={24} onPress={requestBack} accessibilityLabel='Back' />
           </View>
           <View style={[styles.floatingChip, { left: settingsPos.x - 24, top: settingsPos.y - 24 }, rotationStyle]}>
             <IconButton icon='cog' iconColor={bg} containerColor={fg} style={styles.chipButton} size={24} onPress={() => setSettingsOpen(true)} accessibilityLabel='Settings' />
