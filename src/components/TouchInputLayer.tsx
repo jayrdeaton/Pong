@@ -1,3 +1,4 @@
+import { callWorkletCallback, useWorkletCallback } from '@rific/core'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { StyleSheet, useWindowDimensions, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
@@ -89,6 +90,11 @@ export default function TouchInputLayer({ humanPlayers, enabled, containerHeight
     onPaddleTargetY(player, y)
   }, [])
 
+  // The worklets below call handleTouch through a key and the module-level callWorkletCallback, never runOnJS(handleTouch)
+  // directly: native code holds a runOnJS target for as long as the gesture's cached worklet lives, which would pin this
+  // component in memory forever.
+  const touchKey = useWorkletCallback(handleTouch)
+
   const makePlayerGesture = useCallback(
     (player: Player) =>
       Gesture.Pan()
@@ -97,26 +103,19 @@ export default function TouchInputLayer({ humanPlayers, enabled, containerHeight
         .hitSlop({})
         .enabled(enabled)
         .onStart((e) => {
-          runOnJS(handleTouch)(player, e.absoluteX, e.absoluteY)
+          runOnJS(callWorkletCallback)(touchKey, player, e.absoluteX, e.absoluteY)
         })
         .onUpdate((e) => {
-          runOnJS(handleTouch)(player, e.absoluteX, e.absoluteY)
+          runOnJS(callWorkletCallback)(touchKey, player, e.absoluteX, e.absoluteY)
         }),
-    [enabled, handleTouch]
+    [enabled, touchKey]
   )
 
-  // makePlayerGesture only *builds* a Gesture chain here - the ref read it closes over (via
-  // handleTouch, inside .onStart/.onUpdate) doesn't run until an actual touch fires, never during
-  // this useMemo call itself. The linter can't trace that far through the gesture-builder closure,
-  // so it conservatively flags calling it from render - same false-positive class AirHockey's own
-  // TouchInputLayer documents for this exact "ref read inside a gesture-builder callback" shape.
-  /* eslint-disable react-hooks/refs */
   const soloGesture = useMemo(() => (solo ? makePlayerGesture(humanPlayers[0]) : null), [solo, humanPlayers, makePlayerGesture])
   // zoneA is always player 1's zone, zoneB always player 2's - see the file-level comment above for
   // why the physical half each one occupies (not the assignment itself) is what varies with rotation.
   const zoneAGesture = useMemo(() => (solo ? null : makePlayerGesture(1)), [solo, makePlayerGesture])
   const zoneBGesture = useMemo(() => (solo ? null : makePlayerGesture(2)), [solo, makePlayerGesture])
-  /* eslint-enable react-hooks/refs */
 
   if (solo) {
     return (
