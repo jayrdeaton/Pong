@@ -104,7 +104,7 @@ describe("store.ts's persistConfig", () => {
     const shipped: Record<string, string> = { 'pong.settings': JSON.stringify({ gameMode: 'vsCpu' }) }
     expect(await launchRealStore(shipped)).toBe(GUIDE_VERSION)
     // Their root store now exists and holds the stamp, so every later launch keeps it.
-    expect(JSON.parse(JSON.parse(shipped['persist:root']).guide)).toEqual({ versionSeen: GUIDE_VERSION })
+    expect(JSON.parse(JSON.parse(shipped['pong:root']).guide)).toEqual({ versionSeen: GUIDE_VERSION })
     expect(await launchRealStore(shipped)).toBe(GUIDE_VERSION)
 
     const fresh: Record<string, string> = {}
