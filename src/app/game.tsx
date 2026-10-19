@@ -126,14 +126,17 @@ export default function GameScreen() {
   // instant this screen mounts (well before any actual tilt-steering begins) and never toggles again
   // mid-round.
   const { orientationMode, upsideDown } = useOrientationState(tiltControlActive)
-  // vsCpu always seats the sole human at player 1 (see humanPlayersFor) - pin them to the visual
-  // bottom of a portrait/faceToFace hold, the natural single-hand grip, rather than the ±90/
-  // upsideDown pairing above. That pairing is tuned for two-player pass-and-play, where either seat
-  // is equally valid and the upsideDown compensation instead keeps player 1 consistently reading
-  // upright from whichever seat physically picked up the device - a meaningless distinction with
-  // only one seat, and one that happens to land the lone human at the TOP (CPU at the bottom) for
-  // the common upsideDown===false hold, backwards from where a solo player's thumb actually is.
-  const rotation: 0 | 90 | -90 = orientationMode !== 'faceToFace' ? 0 : aiPlayer !== null ? (upsideDown ? 90 : -90) : upsideDown ? -90 : 90
+  // Player 1 sits at the visual bottom of a portrait/faceToFace hold (-90; the top when held upside
+  // down, 90): the natural single-hand grip for vsCpu's lone human, and, in 2 Player, the same half
+  // the loadout gives P1 (its panels flip with an upside-down hold too). 2 Player used to take the
+  // opposite sign, which put P1 at the top of the court after picking the bottom panel.
+  //
+  // 2 Player on a phone also plays face-to-face in a landscape hold (fixedSeats): the loadout pins
+  // 2 Player's panels top/bottom there, so each player keeps the same half of the phone from the
+  // loadout into the match. The unrotated side-by-side court split the phone lengthwise instead,
+  // which the loadout can't show.
+  const fixedSeats = Platform.OS !== 'web' && humanPlayers.length === 2
+  const rotation: 0 | 90 | -90 = orientationMode !== 'faceToFace' && !fixedSeats ? 0 : upsideDown ? 90 : -90
 
   const { width, height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
@@ -380,7 +383,7 @@ export default function GameScreen() {
   // carrying rotationStyle (not p2RotationStyle) since that ±90° reflects the whole board's own
   // landscape-native-vs-portrait-hold orientation, not a P1-vs-P2 opposing flip, and stays needed
   // even here for the icon to read upright at all.
-  const neutralZone = needsSharedNeutralZone(orientationMode, humanPlayers.length)
+  const neutralZone = needsSharedNeutralZone(fixedSeats ? 'faceToFace' : orientationMode, humanPlayers.length)
   // Desktop web: the page's own top corners, upright, the same spot as hud's CornerActionButtons on
   // every other screen. Both players share one screen, keyboard and mouse there, so there's no far
   // seat for the neutral edge to serve, and the page is always read upright.

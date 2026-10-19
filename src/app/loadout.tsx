@@ -128,7 +128,14 @@ export default function LoadoutScreen() {
   // behind the live orientationMode/p1OnRight/upsideDown above - see useDualZoneLayout's own
   // comment. Also drives the solo (vs-CPU) branch's own row below - that one doesn't rotate
   // anything, but still reorders/fades across a portrait<->landscape change the same way.
-  const { panelLayout, panelFadeStyle } = useDualZoneLayout(orientationMode, p1OnRight, p1OnRightResolved, upsideDown, PANEL_SWAP_FADE_MS)
+  //
+  // On a phone, 2 Player stays face-to-face however it's held: P1 in the bottom half, P2 in the top
+  // half, flipped only for an upside-down hold, the same split /game plays 2 Player on there (see
+  // its rotation), so each player gets the same half of the phone here and in the match. Following a
+  // landscape tilt used to put P1 at the phone's top end and then move them on Ready. Web follows
+  // the window here and in /game alike.
+  const fixedSeats = gameMode === 'twoPlayer' && Platform.OS !== 'web'
+  const { panelLayout, panelFadeStyle } = useDualZoneLayout(fixedSeats ? 'faceToFace' : orientationMode, fixedSeats ? true : p1OnRight, fixedSeats || p1OnRightResolved, fixedSeats ? orientationMode === 'faceToFace' && upsideDown : upsideDown, PANEL_SWAP_FADE_MS)
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   // react-native-safe-area-context always reports insets relative to the device's own fixed
